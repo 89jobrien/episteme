@@ -1,0 +1,25 @@
+vault_root = "/Users/joe/Documents/Obsidian Vault"
+inbox_directory = "00_Inbox/_Incoming"
+research_directory = "04_Research"
+archive_directory = "09_Archive/Sources"
+database_path = "/Users/joe/.local/share/episteme/episteme.duckdb"
+minimum_text_characters = 200
+process_timeout_seconds = 300
+maximum_output_bytes = 10485760
+maximum_source_bytes = 104857600
+watch_interval_seconds = 5
+
+[tools]
+pdftotext = "/opt/homebrew/bin/pdftotext"
+pdftoppm = "/opt/homebrew/bin/pdftoppm"
+tesseract = "/opt/homebrew/bin/tesseract"
+pandoc = "/opt/homebrew/bin/pandoc"
+zk = "/opt/homebrew/bin/zk"
+
+[classifier]
+base_url = "http://127.0.0.1:18181/v1"
+model = "configured-local-classifier"
+
+[distiller]
+base_url = "http://127.0.0.1:18181/v1"
+model = "configured-local-distiller"

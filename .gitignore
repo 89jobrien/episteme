@@ -1,0 +1,4 @@
+/target/
+/episteme.toml
+/.state/
+/.env
