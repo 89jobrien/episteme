@@ -78,3 +78,43 @@ tasks:
     phase: done
     status: done
     depends_on: [t9]
+
+  - id: t11
+    title: "classification rejects missing required fields"
+    crate: episteme
+    test: "classification_rejects_missing_required_fields"
+    phase: done
+    status: done
+    depends_on: [t10]
+
+  - id: t12
+    title: "classification pipeline persists and reuses digest records"
+    crate: episteme
+    test: "classification_pipeline_persists_and_reuses_digest_records"
+    phase: done
+    status: done
+    depends_on: [t11]
+
+  - id: t13
+    title: "DuckDB round-trips and upserts classifications"
+    crate: episteme
+    test: "duckdb_round_trips_and_upserts_classifications"
+    phase: done
+    status: done
+    depends_on: [t12]
+
+  - id: t14
+    title: "CLI exposes standalone classify command"
+    crate: episteme
+    test: "cli_exposes_standalone_classify_command"
+    phase: done
+    status: done
+    depends_on: [t13]
+
+  - id: t15
+    title: "staging rejects symlink substitution at file open"
+    crate: episteme
+    test: "source_open_rejects_symlink_substitution"
+    phase: done
+    status: done
+    depends_on: [t14]

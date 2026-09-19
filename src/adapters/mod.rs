@@ -8,7 +8,7 @@ mod duckdb_store;
 mod vault_store;
 mod zk_indexer;
 
-pub use baml_analyzer::BamlResearchAnalyzer;
+pub use baml_analyzer::{BamlDocumentClassifier, BamlResearchAnalyzer};
 pub use document_extractor::DocumentCliExtractor;
 pub use document_tools::SystemDocumentTools;
 pub use duckdb_store::{DuckDbIngestionStore, StoreError};

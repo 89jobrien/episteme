@@ -6,8 +6,8 @@ use async_trait::async_trait;
 use thiserror::Error;
 
 use crate::domain::{
-    ArchivedSource, ExtractedDocument, IngestionRun, ResearchDraft, ResearchNote, SourceDigest,
-    StagedSource, StoredNote,
+    ArchivedSource, ClassificationRecord, DocumentClassification, ExtractedDocument, IngestionRun,
+    ResearchDraft, ResearchNote, SourceDigest, StagedSource, StoredNote,
 };
 
 /// Primitive document conversion operations supplied by command-line tools.
@@ -28,6 +28,16 @@ pub trait DocumentTools: Send + Sync {
 pub trait DocumentExtractor: Send + Sync {
     /// Extracts text and records the deterministic method used.
     async fn extract(&self, source: &StagedSource) -> Result<ExtractedDocument, ExtractionError>;
+}
+
+/// Classifies extracted source text through local inference.
+#[async_trait]
+pub trait DocumentClassifier: Send + Sync {
+    /// Produces typed metadata for an extracted document.
+    async fn classify(
+        &self,
+        document: &ExtractedDocument,
+    ) -> Result<DocumentClassification, AnalysisError>;
 }
 
 /// Produces a typed, source-grounded research draft through local inference.
@@ -78,6 +88,26 @@ pub trait IngestionStore: Send + Sync {
     fn save(&self, run: &IngestionRun) -> Result<(), IngestionStoreError>;
 }
 
+/// Stores rebuildable document classifications.
+pub trait ClassificationStore: Send + Sync {
+    /// Loads a classification by content digest.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClassificationStoreError`] when persistence fails.
+    fn load(
+        &self,
+        digest: &SourceDigest,
+    ) -> Result<Option<ClassificationRecord>, ClassificationStoreError>;
+
+    /// Inserts or replaces one classification record.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClassificationStoreError`] when persistence fails.
+    fn save(&self, record: &ClassificationRecord) -> Result<(), ClassificationStoreError>;
+}
+
 /// Refreshes local vault search indexes.
 #[async_trait]
 pub trait VaultIndexer: Send + Sync {
@@ -89,6 +119,11 @@ pub trait VaultIndexer: Send + Sync {
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 #[error("ingestion store failed: {0}")]
 pub struct IngestionStoreError(pub String);
+
+/// Classification persistence failures.
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[error("classification store failed: {0}")]
+pub struct ClassificationStoreError(pub String);
 
 /// Vault indexing failures.
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
@@ -122,7 +157,7 @@ pub enum AnalysisError {
     #[error("local BAML analysis failed: {0}")]
     Model(String),
     /// Generated output failed domain validation.
-    #[error("invalid generated research draft: {0}")]
+    #[error("invalid generated analysis output: {0}")]
     Invalid(String),
 }
 

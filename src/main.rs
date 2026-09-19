@@ -6,9 +6,10 @@ use anyhow::{Context, Result, bail};
 use chrono::Utc;
 use clap::{Parser, Subcommand};
 use episteme::adapters::{
-    BamlResearchAnalyzer, DocumentCliExtractor, DuckDbIngestionStore, SystemDocumentTools,
-    VaultFileStore, ZkIndexer, prepare_vault_directory,
+    BamlDocumentClassifier, BamlResearchAnalyzer, DocumentCliExtractor, DuckDbIngestionStore,
+    SystemDocumentTools, VaultFileStore, ZkIndexer, prepare_vault_directory,
 };
+use episteme::classification::ClassificationPipeline;
 use episteme::config::Settings;
 use episteme::doctor::Doctor;
 use episteme::domain::AnalysisProvenance;
@@ -36,6 +37,11 @@ enum Command {
         /// Source path beneath the configured inbox.
         source: PathBuf,
     },
+    /// Classify one stable source from the configured inbox.
+    Classify {
+        /// Source path beneath the configured inbox.
+        source: PathBuf,
+    },
     /// Poll the configured inbox and ingest stable files.
     Watch,
 }
@@ -53,8 +59,52 @@ async fn main() -> Result<()> {
             println!("{}: {}", run.digest, run.stage.as_str());
             Ok(())
         }
+        Command::Classify { source } => {
+            let record = classify_path(&settings, &source).await?;
+            println!("{}", serde_json::to_string_pretty(&record)?);
+            Ok(())
+        }
         Command::Watch => watch(&settings).await,
     }
+}
+
+async fn classify_path(
+    settings: &Settings,
+    source_path: &Path,
+) -> Result<episteme::domain::ClassificationRecord> {
+    let inbox = settings.vault_root.join(&settings.inbox_directory);
+    let state_root = settings
+        .database_path
+        .parent()
+        .context("database path must have a parent directory")?;
+    let source = stage_source(
+        &inbox,
+        source_path,
+        &state_root.join("staging"),
+        settings.maximum_source_bytes,
+    )?;
+    let timeout = Duration::from_secs(settings.process_timeout_seconds);
+    let tools = SystemDocumentTools::new(
+        settings.tools.clone(),
+        timeout,
+        settings.maximum_output_bytes,
+    );
+    let extractor = DocumentCliExtractor::new(tools, settings.minimum_text_characters);
+    let classifier = BamlDocumentClassifier::new(settings.classifier.clone(), timeout);
+    let store = DuckDbIngestionStore::open(&settings.database_path)?;
+    ClassificationPipeline::new(extractor, classifier, store)
+        .classify(
+            &source,
+            AnalysisProvenance {
+                function: "ClassifyDocument".to_owned(),
+                client: "LocalClassifier".to_owned(),
+                model: settings.classifier.model().to_owned(),
+                pipeline_version: env!("CARGO_PKG_VERSION").to_owned(),
+                processed_at: Utc::now().to_rfc3339(),
+            },
+        )
+        .await
+        .map_err(Into::into)
 }
 
 fn run_doctor(settings: &Settings) -> Result<()> {

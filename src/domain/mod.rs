@@ -235,6 +235,20 @@ impl ExtractionMethod {
     }
 }
 
+impl FromStr for ExtractionMethod {
+    type Err = DomainError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "pdf_text" => Ok(Self::PdfText),
+            "pdf_ocr" => Ok(Self::PdfOcr),
+            "html_pandoc" => Ok(Self::HtmlPandoc),
+            "image_ocr" => Ok(Self::ImageOcr),
+            _ => Err(DomainError::InvalidExtractionMethod(value.to_owned())),
+        }
+    }
+}
+
 /// A validated source staged for deterministic extraction.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StagedSource {
@@ -318,6 +332,36 @@ pub struct ExtractedDocument {
     source: StagedSource,
     text: String,
     method: ExtractionMethod,
+}
+
+/// Typed metadata inferred from one source document.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DocumentClassification {
+    /// Source-supported document title.
+    pub title: String,
+    /// Source-supported author names, when present.
+    pub authors: Vec<String>,
+    /// Broad source format or publication category.
+    pub source_type: String,
+    /// Detected source language.
+    pub language: String,
+    /// Topic labels supported by the source.
+    pub topics: Vec<String>,
+}
+
+/// Persisted classification with source, extraction, and inference provenance.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClassificationRecord {
+    /// Source content identity.
+    pub source_digest: SourceDigest,
+    /// Original source filename.
+    pub source_name: SourceFileName,
+    /// Deterministic extraction method.
+    pub extraction_method: ExtractionMethod,
+    /// Validated document metadata.
+    pub classification: DocumentClassification,
+    /// Local inference provenance.
+    pub analysis: AnalysisProvenance,
 }
 
 /// A source location and excerpt supporting generated research content.
@@ -436,6 +480,32 @@ impl ResearchDraft {
     }
 }
 
+impl DocumentClassification {
+    /// Validates required classification fields.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError::InvalidClassification`] when required scalar fields or topics are
+    /// empty, contain control characters, exceed metadata limits, or contain invalid list items.
+    pub fn validate(self) -> Result<Self, DomainError> {
+        let scalar_fields_valid = valid_metadata(&self.title, 512)
+            && valid_metadata(&self.source_type, 128)
+            && valid_metadata(&self.language, 64);
+        let lists_valid = self.authors.len() <= 64
+            && !self.topics.is_empty()
+            && self.topics.len() <= 64
+            && self
+                .authors
+                .iter()
+                .all(|author| valid_metadata(author, 256))
+            && self.topics.iter().all(|topic| valid_metadata(topic, 128));
+        if !scalar_fields_valid || !lists_valid {
+            return Err(DomainError::InvalidClassification);
+        }
+        Ok(self)
+    }
+}
+
 impl ExtractedDocument {
     /// Creates extracted content after rejecting empty text.
     ///
@@ -492,9 +562,15 @@ pub enum DomainError {
     /// Deterministic extraction produced no usable text.
     #[error("document extraction produced no text")]
     EmptyExtraction,
+    /// A persisted extraction method was not recognized.
+    #[error("invalid extraction method: {0}")]
+    InvalidExtractionMethod(String),
     /// A generated research draft lacked required content or evidence.
     #[error("research draft must contain required prose and grounded evidence")]
     InvalidResearchDraft,
+    /// A generated classification lacked required metadata.
+    #[error("document classification contains invalid or excessive metadata")]
+    InvalidClassification,
     /// Generated evidence did not occur in extracted source text.
     #[error("research draft contains evidence absent from the source")]
     UngroundedEvidence,
@@ -502,4 +578,10 @@ pub enum DomainError {
 
 fn normalize_whitespace(value: &str) -> String {
     value.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn valid_metadata(value: &str, maximum_characters: usize) -> bool {
+    !value.trim().is_empty()
+        && value.chars().count() <= maximum_characters
+        && !value.chars().any(char::is_control)
 }
