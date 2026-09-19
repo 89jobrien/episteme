@@ -118,3 +118,27 @@ tasks:
     phase: done
     status: done
     depends_on: [t14]
+
+  - id: t16
+    title: "chunk splitter preserves text within bounded chunks"
+    crate: episteme
+    test: "chunk_document_preserves_text_and_bounds_chunks"
+    phase: done
+    status: done
+    depends_on: [t15]
+
+  - id: t17
+    title: "BAML generates typed chunk distillation clients"
+    crate: episteme
+    test: "generated_chunk_distillation_api_is_available"
+    phase: done
+    status: done
+    depends_on: [t16]
+
+  - id: t18
+    title: "large documents route through bounded map reduce"
+    crate: episteme
+    test: "large_documents_use_chunked_distillation"
+    phase: done
+    status: done
+    depends_on: [t17]

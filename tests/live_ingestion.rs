@@ -6,6 +6,27 @@ use episteme::config::validate_live_test_vault;
 #[test]
 #[ignore = "requires EPISTEME_RUN_LIVE=1 and configured local model endpoints"]
 fn live_ingestion_uses_temporary_vault() -> Result<(), Box<dyn std::error::Error>> {
+    run_live_ingestion(
+        "<html><body><h1>Atomic Ingestion</h1><p>Author: Test Researcher.</p><p>Citation: Test Researcher, Atomic Ingestion, 2026.</p><h2>Summary</h2><p>This fixture evaluates local document ingestion.</p><h2>Key Idea</h2><p>Atomic ingestion preserves grounded source evidence.</p><h2>Implementation</h2><p>Write validated notes before archiving source copies.</p><h2>Critique</h2><p>The fixture is intentionally narrow.</p></body></html>",
+        false,
+    )
+}
+
+#[test]
+#[ignore = "requires EPISTEME_RUN_LIVE=1 and configured local model endpoints"]
+fn live_chunked_ingestion_uses_source_span_evidence() -> Result<(), Box<dyn std::error::Error>> {
+    let repeated_section = "<h2>Grounded Processing</h2><p>Atomic ingestion preserves grounded source evidence while chunked distillation keeps large documents within local model context limits.</p><p>Implementation requires bounded chunk processing, exact evidence quotes, deterministic ordering, and validation before vault mutation.</p><p>Critique: aggregation can omit useful details, so every final claim must remain supported by verbatim source evidence.</p>";
+    let document = format!(
+        "<html><body><h1>Atomic Ingestion</h1><p>Author: Test Researcher.</p><p>Citation: Test Researcher, Atomic Ingestion, 2026.</p>{}</body></html>",
+        repeated_section.repeat(40)
+    );
+    run_live_ingestion(&document, true)
+}
+
+fn run_live_ingestion(
+    document: &str,
+    expect_chunked: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     if std::env::var("EPISTEME_RUN_LIVE").as_deref() != Ok("1") {
         return Err("set EPISTEME_RUN_LIVE=1 to run live ingestion".into());
     }
@@ -75,10 +96,7 @@ model = {distiller_model}
         .assert()
         .success();
     let source = vault.join("00_Inbox/_Incoming/fixture.html");
-    fs::write(
-        &source,
-        "<html><body><h1>Atomic Ingestion</h1><p>Author: Test Researcher.</p><p>Citation: Test Researcher, Atomic Ingestion, 2026.</p><h2>Summary</h2><p>This fixture evaluates local document ingestion.</p><h2>Key Idea</h2><p>Atomic ingestion preserves grounded source evidence.</p><h2>Implementation</h2><p>Write validated notes before archiving source copies.</p><h2>Critique</h2><p>The fixture is intentionally narrow and does not evaluate large documents.</p></body></html>",
-    )?;
+    fs::write(&source, document)?;
     Command::cargo_bin("episteme")?
         .args([
             "--config",
@@ -91,6 +109,19 @@ model = {distiller_model}
 
     assert_eq!(fs::read_dir(vault.join("04_Research"))?.count(), 1);
     assert_eq!(fs::read_dir(vault.join("09_Archive/Sources"))?.count(), 1);
+    let note_path = fs::read_dir(vault.join("04_Research"))?
+        .next()
+        .ok_or("research note was not created")??
+        .path();
+    let note = fs::read_to_string(note_path)?;
+    assert!(note.contains("baml_function: \"ResearchDistillationPipeline\""));
+    assert!(note.contains(&format!(
+        "baml_model: \"classifier={classifier_model};distiller={distiller_model}\""
+    )));
+    if expect_chunked {
+        assert!(note.contains("characters "));
+        assert!(note.contains("Atomic ingestion preserves grounded source evidence"));
+    }
     assert!(source.exists());
     Ok(())
 }

@@ -14,6 +14,32 @@ use baml::{__internal::serde::Serialize, BamlDecode};
 
 #[derive(Debug, Clone, Default, BamlDecode, Serialize)]
 #[serde(crate = "::baml::__internal::serde")]
+pub struct AggregatedResearchOutput {
+    pub title: Option<String>,
+
+    pub citation: Option<String>,
+
+    pub topics: Vec<String>,
+
+    pub summary: Option<String>,
+
+    pub key_ideas: Vec<String>,
+
+    pub implementation_notes: Vec<String>,
+
+    pub critique: Option<String>,
+
+    pub evidence_span_ids: Vec<String>,
+}
+
+impl ::std::convert::AsRef<AggregatedResearchOutput> for AggregatedResearchOutput {
+    fn as_ref(&self) -> &AggregatedResearchOutput {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct DocumentClassification {
     pub title: Option<String>,
 
@@ -48,6 +74,26 @@ impl ::std::convert::AsRef<EvidenceReferenceOutput> for EvidenceReferenceOutput 
 
 #[derive(Debug, Clone, Default, BamlDecode, Serialize)]
 #[serde(crate = "::baml::__internal::serde")]
+pub struct ResearchChunkOutput {
+    pub summary: Option<String>,
+
+    pub key_ideas: Vec<String>,
+
+    pub implementation_notes: Vec<String>,
+
+    pub critique_points: Vec<String>,
+
+    pub evidence_span_ids: Vec<String>,
+}
+
+impl ::std::convert::AsRef<ResearchChunkOutput> for ResearchChunkOutput {
+    fn as_ref(&self) -> &ResearchChunkOutput {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ResearchDraftOutput {
     pub title: Option<String>,
 
@@ -68,6 +114,22 @@ pub struct ResearchDraftOutput {
 
 impl ::std::convert::AsRef<ResearchDraftOutput> for ResearchDraftOutput {
     fn as_ref(&self) -> &ResearchDraftOutput {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
+pub struct SourceSpanInput {
+    pub id: Option<String>,
+
+    pub text: Option<String>,
+
+    pub location: Option<String>,
+}
+
+impl ::std::convert::AsRef<SourceSpanInput> for SourceSpanInput {
+    fn as_ref(&self) -> &SourceSpanInput {
         self
     }
 }

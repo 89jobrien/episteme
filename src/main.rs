@@ -179,9 +179,13 @@ async fn ingest_path(
         .ingest(
             &source,
             AnalysisProvenance {
-                function: "DistillResearch".to_owned(),
-                client: "LocalDistiller".to_owned(),
-                model: settings.distiller.model().to_owned(),
+                function: "ResearchDistillationPipeline".to_owned(),
+                client: "LocalClassifier+LocalDistiller".to_owned(),
+                model: format!(
+                    "classifier={};distiller={}",
+                    settings.classifier.model(),
+                    settings.distiller.model()
+                ),
                 pipeline_version: env!("CARGO_PKG_VERSION").to_owned(),
                 processed_at: Utc::now().to_rfc3339(),
             },

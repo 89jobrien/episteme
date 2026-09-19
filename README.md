@@ -50,6 +50,11 @@ Repeated classification of unchanged content reuses the digest-matched record.
 `watch` requires two unchanged observations before processing a file. Manual and watched ingestion
 use the same recoverable application service.
 
+Research distillation automatically uses typed map/reduce for extracted documents over 12,000
+characters. Rust assigns stable IDs to exact source spans; model calls select IDs rather than
+generating quotes, and Rust reconstructs verbatim evidence and character locations. The final
+aggregate must pass the same source-grounding validation before Episteme writes to the vault.
+
 ## Verify
 
 ```text
