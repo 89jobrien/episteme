@@ -3,6 +3,7 @@
 pub mod adapters;
 #[allow(clippy::all, clippy::pedantic)]
 pub mod baml_client;
+pub mod classification;
 pub mod config;
 pub mod doctor;
 pub mod domain;

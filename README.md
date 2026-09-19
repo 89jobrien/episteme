@@ -38,12 +38,22 @@ port `18181` and intentionally avoids Ollama's conventional `11434` port.
 ```text
 cargo run -- --config episteme.toml doctor
 cargo run -- --config episteme.toml init
+cargo run -- --config episteme.toml classify "/path/inside/configured/inbox/document.pdf"
 cargo run -- --config episteme.toml ingest "/path/inside/configured/inbox/document.pdf"
 cargo run -- --config episteme.toml watch
 ```
 
+`classify` extracts one inbox document, persists typed metadata in rebuildable DuckDB state, and
+prints the stored record as JSON. It does not create a note, archive the source, or refresh `zk`.
+Repeated classification of unchanged content reuses the digest-matched record.
+
 `watch` requires two unchanged observations before processing a file. Manual and watched ingestion
 use the same recoverable application service.
+
+Research distillation automatically uses typed map/reduce for extracted documents over 12,000
+characters. Rust assigns stable IDs to exact source spans; model calls select IDs rather than
+generating quotes, and Rust reconstructs verbatim evidence and character locations. The final
+aggregate must pass the same source-grounding validation before Episteme writes to the vault.
 
 ## Verify
 

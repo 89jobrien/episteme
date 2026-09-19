@@ -129,9 +129,13 @@ macro_rules! baml_function_async {
 // Generate function structs
 // =============================================================================
 
+baml_function_async!(AggregateResearchChunks(classification: &types::DocumentClassification, chunks: &[types::ResearchChunkOutput], ) -> (stream_types::AggregatedResearchOutput, types::AggregatedResearchOutput));
+
 baml_function_async!(ClassifyDocument(document: impl AsRef<str> + BamlEncode, ) -> (stream_types::DocumentClassification, types::DocumentClassification));
 
 baml_function_async!(DistillResearch(document: impl AsRef<str> + BamlEncode, classification: &types::DocumentClassification, ) -> (stream_types::ResearchDraftOutput, types::ResearchDraftOutput));
+
+baml_function_async!(DistillResearchChunk(spans: &[types::SourceSpanInput], classification: &types::DocumentClassification, ) -> (stream_types::ResearchChunkOutput, types::ResearchChunkOutput));
 
 // =============================================================================
 // Client Struct
@@ -141,9 +145,13 @@ baml_function_async!(DistillResearch(document: impl AsRef<str> + BamlEncode, cla
 pub struct BamlAsyncClient {
     options: FunctionOptions,
 
+    pub AggregateResearchChunks: AggregateResearchChunks,
+
     pub ClassifyDocument: ClassifyDocument,
 
     pub DistillResearch: DistillResearch,
+
+    pub DistillResearchChunk: DistillResearchChunk,
 }
 
 impl BamlAsyncClient {
@@ -151,9 +159,13 @@ impl BamlAsyncClient {
         Self {
             options: FunctionOptions::new(),
 
+            AggregateResearchChunks: AggregateResearchChunks::new(),
+
             ClassifyDocument: ClassifyDocument::new(),
 
             DistillResearch: DistillResearch::new(),
+
+            DistillResearchChunk: DistillResearchChunk::new(),
         }
     }
 
@@ -162,11 +174,19 @@ impl BamlAsyncClient {
         Self {
             options: options.clone(),
 
+            AggregateResearchChunks: AggregateResearchChunks {
+                options: options.clone(),
+            },
+
             ClassifyDocument: ClassifyDocument {
                 options: options.clone(),
             },
 
             DistillResearch: DistillResearch {
+                options: options.clone(),
+            },
+
+            DistillResearchChunk: DistillResearchChunk {
                 options: options.clone(),
             },
         }

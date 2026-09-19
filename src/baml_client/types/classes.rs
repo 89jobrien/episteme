@@ -13,6 +13,25 @@ use baml::{
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
 #[serde(crate = "::baml::__internal::serde")]
+pub struct AggregatedResearchOutput {
+    pub title: String,
+    pub citation: String,
+    pub topics: Vec<String>,
+    pub summary: String,
+    pub key_ideas: Vec<String>,
+    pub implementation_notes: Vec<String>,
+    pub critique: String,
+    pub evidence_span_ids: Vec<String>,
+}
+
+impl ::std::convert::AsRef<AggregatedResearchOutput> for AggregatedResearchOutput {
+    fn as_ref(&self) -> &AggregatedResearchOutput {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct DocumentClassification {
     pub title: String,
     pub authors: Vec<String>,
@@ -42,6 +61,22 @@ impl ::std::convert::AsRef<EvidenceReferenceOutput> for EvidenceReferenceOutput 
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
 #[serde(crate = "::baml::__internal::serde")]
+pub struct ResearchChunkOutput {
+    pub summary: String,
+    pub key_ideas: Vec<String>,
+    pub implementation_notes: Vec<String>,
+    pub critique_points: Vec<String>,
+    pub evidence_span_ids: Vec<String>,
+}
+
+impl ::std::convert::AsRef<ResearchChunkOutput> for ResearchChunkOutput {
+    fn as_ref(&self) -> &ResearchChunkOutput {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ResearchDraftOutput {
     pub title: String,
     pub citation: String,
@@ -55,6 +90,20 @@ pub struct ResearchDraftOutput {
 
 impl ::std::convert::AsRef<ResearchDraftOutput> for ResearchDraftOutput {
     fn as_ref(&self) -> &ResearchDraftOutput {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
+pub struct SourceSpanInput {
+    pub id: String,
+    pub text: String,
+    pub location: String,
+}
+
+impl ::std::convert::AsRef<SourceSpanInput> for SourceSpanInput {
+    fn as_ref(&self) -> &SourceSpanInput {
         self
     }
 }

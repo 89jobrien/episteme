@@ -25,11 +25,17 @@ pub use baml::{Checked, StreamState};
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Types {
+    AggregatedResearchOutput(AggregatedResearchOutput),
+
     DocumentClassification(DocumentClassification),
 
     EvidenceReferenceOutput(EvidenceReferenceOutput),
 
+    ResearchChunkOutput(ResearchChunkOutput),
+
     ResearchDraftOutput(ResearchDraftOutput),
+
+    SourceSpanInput(SourceSpanInput),
 }
 
 impl ::baml::KnownTypes for Types {
@@ -39,11 +45,17 @@ impl ::baml::KnownTypes for Types {
 
     fn type_name(&self) -> &'static str {
         match self {
+            Self::AggregatedResearchOutput(_) => "AggregatedResearchOutput",
+
             Self::DocumentClassification(_) => "DocumentClassification",
 
             Self::EvidenceReferenceOutput(_) => "EvidenceReferenceOutput",
 
+            Self::ResearchChunkOutput(_) => "ResearchChunkOutput",
+
             Self::ResearchDraftOutput(_) => "ResearchDraftOutput",
+
+            Self::SourceSpanInput(_) => "SourceSpanInput",
         }
     }
 }

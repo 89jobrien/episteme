@@ -21,11 +21,17 @@ use baml::__internal::serde;
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum StreamTypes {
+    AggregatedResearchOutput(AggregatedResearchOutput),
+
     DocumentClassification(DocumentClassification),
 
     EvidenceReferenceOutput(EvidenceReferenceOutput),
 
+    ResearchChunkOutput(ResearchChunkOutput),
+
     ResearchDraftOutput(ResearchDraftOutput),
+
+    SourceSpanInput(SourceSpanInput),
 }
 
 impl baml::KnownTypes for StreamTypes {
@@ -35,11 +41,17 @@ impl baml::KnownTypes for StreamTypes {
 
     fn type_name(&self) -> &'static str {
         match self {
+            StreamTypes::AggregatedResearchOutput(_) => "AggregatedResearchOutput",
+
             StreamTypes::DocumentClassification(_) => "DocumentClassification",
 
             StreamTypes::EvidenceReferenceOutput(_) => "EvidenceReferenceOutput",
 
+            StreamTypes::ResearchChunkOutput(_) => "ResearchChunkOutput",
+
             StreamTypes::ResearchDraftOutput(_) => "ResearchDraftOutput",
+
+            StreamTypes::SourceSpanInput(_) => "SourceSpanInput",
         }
     }
 }

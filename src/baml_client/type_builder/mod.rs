@@ -48,6 +48,15 @@ impl TypeBuilder {
     // Schema Class Accessors (1:1 with schema class names)
     // =========================================================================
 
+    /// Access the `AggregatedResearchOutput` class builder.
+    pub fn AggregatedResearchOutput(&self) -> AggregatedResearchOutputClassBuilder {
+        AggregatedResearchOutputClassBuilder::new(
+            self.inner
+                .get_class("AggregatedResearchOutput")
+                .expect("class AggregatedResearchOutput is defined in schema"),
+        )
+    }
+
     /// Access the `DocumentClassification` class builder.
     pub fn DocumentClassification(&self) -> DocumentClassificationClassBuilder {
         DocumentClassificationClassBuilder::new(
@@ -66,12 +75,30 @@ impl TypeBuilder {
         )
     }
 
+    /// Access the `ResearchChunkOutput` class builder.
+    pub fn ResearchChunkOutput(&self) -> ResearchChunkOutputClassBuilder {
+        ResearchChunkOutputClassBuilder::new(
+            self.inner
+                .get_class("ResearchChunkOutput")
+                .expect("class ResearchChunkOutput is defined in schema"),
+        )
+    }
+
     /// Access the `ResearchDraftOutput` class builder.
     pub fn ResearchDraftOutput(&self) -> ResearchDraftOutputClassBuilder {
         ResearchDraftOutputClassBuilder::new(
             self.inner
                 .get_class("ResearchDraftOutput")
                 .expect("class ResearchDraftOutput is defined in schema"),
+        )
+    }
+
+    /// Access the `SourceSpanInput` class builder.
+    pub fn SourceSpanInput(&self) -> SourceSpanInputClassBuilder {
+        SourceSpanInputClassBuilder::new(
+            self.inner
+                .get_class("SourceSpanInput")
+                .expect("class SourceSpanInput is defined in schema"),
         )
     }
 

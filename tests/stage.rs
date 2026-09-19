@@ -1,4 +1,6 @@
-use episteme::stage::stage_source;
+use std::os::unix::fs::symlink;
+
+use episteme::stage::{StageError, stage_source};
 
 #[test]
 fn staging_uses_an_immutable_private_copy() -> Result<(), Box<dyn std::error::Error>> {
@@ -18,5 +20,23 @@ fn staging_uses_an_immutable_private_copy() -> Result<(), Box<dyn std::error::Er
         std::fs::read_to_string(staged.original_path())?,
         "replacement source"
     );
+    Ok(())
+}
+
+#[test]
+fn staging_rejects_symlinked_parent_components() -> Result<(), Box<dyn std::error::Error>> {
+    let root = tempfile::tempdir()?;
+    let inbox = root.path().join("inbox");
+    let real_directory = inbox.join("real");
+    let alias_directory = inbox.join("alias");
+    let staging = root.path().join("state/staging");
+    std::fs::create_dir_all(&real_directory)?;
+    std::fs::write(real_directory.join("paper.html"), "source")?;
+    symlink(&real_directory, &alias_directory)?;
+
+    assert!(matches!(
+        stage_source(&inbox, &alias_directory.join("paper.html"), &staging, 1024),
+        Err(StageError::NotRegularFile)
+    ));
     Ok(())
 }
