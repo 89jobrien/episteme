@@ -1,8 +1,8 @@
-vault_root = "/Users/joe/Documents/Obsidian Vault"
+vault_root = "/path/to/Obsidian Vault"
 inbox_directory = "00_Inbox/_Incoming"
 research_directory = "04_Research"
 archive_directory = "09_Archive/Sources"
-database_path = "/Users/joe/.local/share/episteme/episteme.duckdb"
+database_path = "/path/to/local/state/episteme.duckdb"
 minimum_text_characters = 200
 process_timeout_seconds = 300
 maximum_output_bytes = 10485760

@@ -1,8 +1,17 @@
 # Episteme
 
-Episteme is a private, local-first document ingestion pipeline for an Obsidian vault. It uses
+Episteme is a privacy-preserving, local-first document ingestion pipeline for an Obsidian vault. It uses
 deterministic extraction tools, typed BAML functions backed by explicitly configured local model
 endpoints, atomic note persistence, DuckDB provenance, and `zk` indexing.
+
+Install the `episteme` CLI from crates.io with:
+
+```text
+cargo install episteme-local
+```
+
+The package is named `episteme-local`; the installed executable and library crate remain
+`episteme`.
 
 ## Current slice
 
@@ -25,22 +34,27 @@ automatic public downloads remain disabled.
 
 ## Configure
 
+Install Poppler, Tesseract, Pandoc, and `zk`, then ensure a local OpenAI-compatible model endpoint
+is running on an explicit loopback address. On macOS with Homebrew:
+
 ```text
-cp episteme.toml.example episteme.toml
+brew install poppler tesseract pandoc zk
 ```
 
-Set both model sections to existing OpenAI-compatible endpoints bound to explicit loopback IP
-addresses. Episteme requires those services to be managed externally. The example uses dedicated
-port `18181` and intentionally avoids Ollama's conventional `11434` port.
+Create `episteme.toml` from the packaged example or repository example. Replace every `/path/to`
+value and tool path with an absolute local path. Set both model sections to existing
+OpenAI-compatible endpoints bound to explicit loopback IP addresses. Episteme requires those
+services to be managed externally. The example uses dedicated port `18181` and intentionally avoids
+Ollama's conventional `11434` port.
 
 ## Use
 
 ```text
-cargo run -- --config episteme.toml doctor
-cargo run -- --config episteme.toml init
-cargo run -- --config episteme.toml classify "/path/inside/configured/inbox/document.pdf"
-cargo run -- --config episteme.toml ingest "/path/inside/configured/inbox/document.pdf"
-cargo run -- --config episteme.toml watch
+episteme --config episteme.toml doctor
+episteme --config episteme.toml init
+episteme --config episteme.toml classify "/path/inside/configured/inbox/document.pdf"
+episteme --config episteme.toml ingest "/path/inside/configured/inbox/document.pdf"
+episteme --config episteme.toml watch
 ```
 
 `classify` extracts one inbox document, persists typed metadata in rebuildable DuckDB state, and

@@ -1,10 +1,25 @@
 [package]
-name = "episteme"
-version = "0.1.0"
+name = "episteme-local"
+version = "0.1.1"
 edition = "2024"
 description = "Local-first knowledge ingestion and intelligence workflows"
 license = "MIT OR Apache-2.0"
-publish = false
+authors = ["Joseph O'Brien"]
+repository = "https://github.com/89jobrien/episteme"
+documentation = "https://docs.rs/episteme-local"
+readme = "README.md"
+keywords = ["document-ingestion", "knowledge-management", "obsidian", "local-first", "research"]
+categories = ["command-line-utilities", "text-processing", "database"]
+publish = ["crates-io"]
+exclude = [".ctx/", "AGENTS.md", "docs/designs/"]
+
+[lib]
+name = "episteme"
+path = "src/lib.rs"
+
+[[bin]]
+name = "episteme"
+path = "src/main.rs"
 
 [dependencies]
 anyhow = "1"

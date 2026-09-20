@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 - 2026-09-19
+
+### Packaging
+
+- Publish the package to crates.io as `episteme-local` while retaining `episteme` as the library
+  and executable name.
+- Add complete crates.io metadata and dual MIT/Apache-2.0 license texts.
+
+## 0.1.0 - 2026-09-19
 
 ### Features
 
