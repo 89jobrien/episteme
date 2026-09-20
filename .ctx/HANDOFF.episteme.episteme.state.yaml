@@ -1,0 +1,10 @@
+updated: 20260919.221900
+branch: main
+build: passed
+tests: passed
+notes: 'v0.1.1 is merged, tagged, published to crates.io, and released on GitHub. All 18 tasks are done. Next: design private search across zk and msgvault. Preserve the local unstaged .gitignore edit.'
+touched_files:
+- .ctx/godmode/memory-bank/active-context.md
+- .ctx/godmode/memory-bank/mistakes.md
+- .ctx/godmode/memory-bank/progress.md
+- .ctx/godmode/reports/reflect/reflect-2026-09-19.md

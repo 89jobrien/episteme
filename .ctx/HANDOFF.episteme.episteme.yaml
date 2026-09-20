@@ -1,0 +1,20 @@
+project: episteme
+id: episteme
+updated: 2026-09-19
+items: []
+log:
+- date: '20260918'
+  summary: 'Created and verified the first local document-ingestion slice. Rust, BAML, DuckDB, Poppler, Tesseract, Pandoc, and zk now form a recoverable trusted-document pipeline with immutable staging, grounded evidence, atomic vault persistence, live Apfel verification on dedicated port 18181, and no automatic source deletion. Ten tasks and all CI gates passed. Next planned slice: private search across zk and msgvault. Public downloads remain blocked on converter sandboxing.'
+  commits:
+  - 093f5dc
+  session: 1
+- date: '20260919'
+  summary: 'Completed standalone classification, secure descriptor-relative staging, grounded chunked BAML distillation with deterministic source-span evidence, and local classification of 110 queued documents. Created and merged private GitHub release branches, published GitHub releases v0.1.0 and v0.1.1, and published episteme-local v0.1.1 to crates.io. Converted the Rust release orchestrator from Python to a declarative .crux pipeline with typed plugin handlers and fixed dry-run authentication plus ignored resumable state. All 18 godmode tasks and final Cargo/live/release gates passed. Next planned slice: private search across zk and msgvault.'
+  commits:
+  - 8ad0440
+  - 9b861d4
+  - 8d21e3c
+  - f1f622a
+  - 859a249
+  - 42a09ca
+  session: 2
