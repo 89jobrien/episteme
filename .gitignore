@@ -2,3 +2,7 @@
 /episteme.toml
 /.state/
 /.env
+
+# handoff-begin
+.ctx/
+# handoff-end

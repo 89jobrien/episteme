@@ -85,6 +85,71 @@ impl AggregatedResearchOutputClassBuilder {
     }
 }
 
+/// Wrapper for the `ClaimOutput` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct ClaimOutputClassBuilder {
+    inner: ::baml::ClassBuilder,
+}
+
+impl ClaimOutputClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &::baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> ::baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("ClaimOutput is statically defined in .baml and should always have a type")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `local_id` field builder.
+    pub fn property_local_id(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("local_id").expect(
+            "ClaimOutput.local_id is statically defined in .baml and should always be present",
+        )
+    }
+
+    /// Access the `text` field builder.
+    pub fn property_text(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("text")
+            .expect("ClaimOutput.text is statically defined in .baml and should always be present")
+    }
+
+    /// Access the `kind` field builder.
+    pub fn property_kind(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("kind")
+            .expect("ClaimOutput.kind is statically defined in .baml and should always be present")
+    }
+
+    /// Access the `confidence_percent` field builder.
+    pub fn property_confidence_percent(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("confidence_percent")
+            .expect("ClaimOutput.confidence_percent is statically defined in .baml and should always be present")
+    }
+
+    /// Access the `evidence_span_ids` field builder.
+    pub fn property_evidence_span_ids(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("evidence_span_ids")
+            .expect("ClaimOutput.evidence_span_ids is statically defined in .baml and should always be present")
+    }
+}
+
 /// Wrapper for the `DocumentClassification` class builder.
 ///
 /// Provides type-safe method access to fields defined in the schema.
@@ -134,16 +199,156 @@ impl DocumentClassificationClassBuilder {
             .expect("DocumentClassification.source_type is statically defined in .baml and should always be present")
     }
 
-    /// Access the `language` field builder.
-    pub fn property_language(&self) -> ::baml::ClassPropertyBuilder {
-        self.inner.get_property("language")
-            .expect("DocumentClassification.language is statically defined in .baml and should always be present")
+    /// Access the `language_code` field builder.
+    pub fn property_language_code(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("language_code")
+            .expect("DocumentClassification.language_code is statically defined in .baml and should always be present")
     }
 
     /// Access the `topics` field builder.
     pub fn property_topics(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("topics")
             .expect("DocumentClassification.topics is statically defined in .baml and should always be present")
+    }
+}
+
+/// Wrapper for the `DocumentIntelligenceOutput` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct DocumentIntelligenceOutputClassBuilder {
+    inner: ::baml::ClassBuilder,
+}
+
+impl DocumentIntelligenceOutputClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &::baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> ::baml::TypeDef {
+        self.inner.as_type()
+            .expect("DocumentIntelligenceOutput is statically defined in .baml and should always have a type")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `summary` field builder.
+    pub fn property_summary(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("summary")
+            .expect("DocumentIntelligenceOutput.summary is statically defined in .baml and should always be present")
+    }
+
+    /// Access the `key_points` field builder.
+    pub fn property_key_points(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("key_points")
+            .expect("DocumentIntelligenceOutput.key_points is statically defined in .baml and should always be present")
+    }
+
+    /// Access the `summary_span_ids` field builder.
+    pub fn property_summary_span_ids(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("summary_span_ids")
+            .expect("DocumentIntelligenceOutput.summary_span_ids is statically defined in .baml and should always be present")
+    }
+
+    /// Access the `claims` field builder.
+    pub fn property_claims(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("claims")
+            .expect("DocumentIntelligenceOutput.claims is statically defined in .baml and should always be present")
+    }
+
+    /// Access the `entities` field builder.
+    pub fn property_entities(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("entities")
+            .expect("DocumentIntelligenceOutput.entities is statically defined in .baml and should always be present")
+    }
+
+    /// Access the `relations` field builder.
+    pub fn property_relations(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("relations")
+            .expect("DocumentIntelligenceOutput.relations is statically defined in .baml and should always be present")
+    }
+}
+
+/// Wrapper for the `EntityOutput` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct EntityOutputClassBuilder {
+    inner: ::baml::ClassBuilder,
+}
+
+impl EntityOutputClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &::baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> ::baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("EntityOutput is statically defined in .baml and should always have a type")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `local_id` field builder.
+    pub fn property_local_id(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("local_id").expect(
+            "EntityOutput.local_id is statically defined in .baml and should always be present",
+        )
+    }
+
+    /// Access the `name` field builder.
+    pub fn property_name(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("name")
+            .expect("EntityOutput.name is statically defined in .baml and should always be present")
+    }
+
+    /// Access the `aliases` field builder.
+    pub fn property_aliases(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("aliases").expect(
+            "EntityOutput.aliases is statically defined in .baml and should always be present",
+        )
+    }
+
+    /// Access the `kind` field builder.
+    pub fn property_kind(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("kind")
+            .expect("EntityOutput.kind is statically defined in .baml and should always be present")
+    }
+
+    /// Access the `description` field builder.
+    pub fn property_description(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("description").expect(
+            "EntityOutput.description is statically defined in .baml and should always be present",
+        )
+    }
+
+    /// Access the `evidence_span_ids` field builder.
+    pub fn property_evidence_span_ids(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("evidence_span_ids")
+            .expect("EntityOutput.evidence_span_ids is statically defined in .baml and should always be present")
     }
 }
 
@@ -188,6 +393,74 @@ impl EvidenceReferenceOutputClassBuilder {
     pub fn property_location(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("location")
             .expect("EvidenceReferenceOutput.location is statically defined in .baml and should always be present")
+    }
+}
+
+/// Wrapper for the `IntelligenceChunkOutput` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct IntelligenceChunkOutputClassBuilder {
+    inner: ::baml::ClassBuilder,
+}
+
+impl IntelligenceChunkOutputClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &::baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> ::baml::TypeDef {
+        self.inner.as_type().expect(
+            "IntelligenceChunkOutput is statically defined in .baml and should always have a type",
+        )
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `summary` field builder.
+    pub fn property_summary(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("summary")
+            .expect("IntelligenceChunkOutput.summary is statically defined in .baml and should always be present")
+    }
+
+    /// Access the `key_points` field builder.
+    pub fn property_key_points(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("key_points")
+            .expect("IntelligenceChunkOutput.key_points is statically defined in .baml and should always be present")
+    }
+
+    /// Access the `summary_span_ids` field builder.
+    pub fn property_summary_span_ids(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("summary_span_ids")
+            .expect("IntelligenceChunkOutput.summary_span_ids is statically defined in .baml and should always be present")
+    }
+
+    /// Access the `claims` field builder.
+    pub fn property_claims(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("claims")
+            .expect("IntelligenceChunkOutput.claims is statically defined in .baml and should always be present")
+    }
+
+    /// Access the `entities` field builder.
+    pub fn property_entities(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("entities")
+            .expect("IntelligenceChunkOutput.entities is statically defined in .baml and should always be present")
+    }
+
+    /// Access the `relations` field builder.
+    pub fn property_relations(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("relations")
+            .expect("IntelligenceChunkOutput.relations is statically defined in .baml and should always be present")
     }
 }
 
@@ -331,6 +604,68 @@ impl ResearchDraftOutputClassBuilder {
     pub fn property_evidence(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("evidence")
             .expect("ResearchDraftOutput.evidence is statically defined in .baml and should always be present")
+    }
+}
+
+/// Wrapper for the `SemanticRelationOutput` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct SemanticRelationOutputClassBuilder {
+    inner: ::baml::ClassBuilder,
+}
+
+impl SemanticRelationOutputClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &::baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> ::baml::TypeDef {
+        self.inner.as_type().expect(
+            "SemanticRelationOutput is statically defined in .baml and should always have a type",
+        )
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `source_local_id` field builder.
+    pub fn property_source_local_id(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("source_local_id")
+            .expect("SemanticRelationOutput.source_local_id is statically defined in .baml and should always be present")
+    }
+
+    /// Access the `target_local_id` field builder.
+    pub fn property_target_local_id(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("target_local_id")
+            .expect("SemanticRelationOutput.target_local_id is statically defined in .baml and should always be present")
+    }
+
+    /// Access the `relation_type` field builder.
+    pub fn property_relation_type(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("relation_type")
+            .expect("SemanticRelationOutput.relation_type is statically defined in .baml and should always be present")
+    }
+
+    /// Access the `confidence_percent` field builder.
+    pub fn property_confidence_percent(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("confidence_percent")
+            .expect("SemanticRelationOutput.confidence_percent is statically defined in .baml and should always be present")
+    }
+
+    /// Access the `evidence_span_ids` field builder.
+    pub fn property_evidence_span_ids(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("evidence_span_ids")
+            .expect("SemanticRelationOutput.evidence_span_ids is statically defined in .baml and should always be present")
     }
 }
 

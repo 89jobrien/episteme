@@ -1,6 +1,9 @@
+//! Checks generated chunking APIs and untrusted-source prompt boundaries.
+
 use episteme::baml_client::B;
 use episteme::baml_client::types::{
-    AggregatedResearchOutput, ResearchChunkOutput, SourceSpanInput,
+    AggregatedResearchOutput, DocumentIntelligenceOutput, IntelligenceChunkOutput,
+    ResearchChunkOutput, SourceSpanInput,
 };
 
 #[test]
@@ -10,6 +13,14 @@ fn generated_chunk_distillation_api_is_available() {
     let _: AggregatedResearchOutput = AggregatedResearchOutput::default();
     let _ = &B.DistillResearchChunk;
     let _ = &B.AggregateResearchChunks;
+}
+
+#[test]
+fn generated_document_intelligence_api_is_available() {
+    let _: IntelligenceChunkOutput = IntelligenceChunkOutput::default();
+    let _: DocumentIntelligenceOutput = DocumentIntelligenceOutput::default();
+    let _ = &B.ExtractIntelligenceChunk;
+    let _ = &B.AggregateDocumentIntelligence;
 }
 
 #[test]

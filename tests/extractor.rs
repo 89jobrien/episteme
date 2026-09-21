@@ -1,3 +1,5 @@
+//! Tests format routing and OCR fallback during document extraction.
+
 use std::path::Path;
 use std::sync::Mutex;
 

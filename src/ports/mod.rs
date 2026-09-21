@@ -1,13 +1,18 @@
 //! Hexagonal ports for external document and storage integrations.
 
 use std::path::Path;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use thiserror::Error;
 
+use crate::config::ClassifierProfile;
 use crate::domain::{
-    ArchivedSource, ClassificationRecord, DocumentClassification, ExtractedDocument, IngestionRun,
-    ResearchDraft, ResearchNote, SourceDigest, StagedSource, StoredNote,
+    ArchivedSource, ClassificationAttemptRecord, ClassificationBatchSummary,
+    ClassificationCacheKey, ClassificationFailure, ClassificationOutcome, ClassificationRecord,
+    DocumentClassification, DocumentIntelligence, ExtractedDocument, IngestionRun,
+    IntelligenceCacheKey, ModelAvailability, ResearchDraft, ResearchNote, SourceDigest,
+    StagedSource, StoredNote,
 };
 
 /// Primitive document conversion operations supplied by command-line tools.
@@ -33,11 +38,35 @@ pub trait DocumentExtractor: Send + Sync {
 /// Classifies extracted source text through local inference.
 #[async_trait]
 pub trait DocumentClassifier: Send + Sync {
+    /// Returns ordered cache keys eligible for this extracted input size.
+    fn cache_keys(&self, extracted_characters: usize) -> Vec<ClassificationCacheKey>;
+
     /// Produces typed metadata for an extracted document.
     async fn classify(
         &self,
         document: &ExtractedDocument,
-    ) -> Result<DocumentClassification, AnalysisError>;
+    ) -> Result<ClassificationOutcome, ClassificationFailure>;
+}
+
+/// Calls one explicit local classifier profile.
+#[async_trait]
+pub trait ProfileClassifier: Send + Sync {
+    /// Produces metadata through exactly one configured profile.
+    async fn classify_with_profile(
+        &self,
+        document: &ExtractedDocument,
+        profile: &ClassifierProfile,
+    ) -> Result<DocumentClassification, ClassificationFailure>;
+}
+
+/// Checks local model endpoint readiness before inference.
+#[async_trait]
+pub trait ModelProbe: Send + Sync {
+    /// Probes one validated loopback-only classifier profile.
+    async fn probe(
+        &self,
+        profile: &ClassifierProfile,
+    ) -> Result<ModelAvailability, ClassificationFailure>;
 }
 
 /// Produces a typed, source-grounded research draft through local inference.
@@ -45,6 +74,42 @@ pub trait DocumentClassifier: Send + Sync {
 pub trait ResearchAnalyzer: Send + Sync {
     /// Analyzes extracted source text.
     async fn analyze(&self, document: &ExtractedDocument) -> Result<ResearchDraft, AnalysisError>;
+}
+
+/// Produces an evidence-grounded summary, claim set, and semantic graph.
+#[async_trait]
+pub trait DocumentIntelligenceAnalyzer: Send + Sync {
+    /// Analyzes one extracted document using its normalized classification.
+    async fn analyze_intelligence(
+        &self,
+        document: &ExtractedDocument,
+        classification: &DocumentClassification,
+    ) -> Result<DocumentIntelligence, AnalysisError>;
+}
+
+/// Stores versioned rebuildable document intelligence graphs.
+pub trait DocumentIntelligenceStore: Send + Sync {
+    /// Loads one matching versioned intelligence graph.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`IntelligenceStoreError`] when persistence fails.
+    fn load_intelligence(
+        &self,
+        digest: &SourceDigest,
+        key: &IntelligenceCacheKey,
+    ) -> Result<Option<DocumentIntelligence>, IntelligenceStoreError>;
+
+    /// Saves one complete versioned intelligence graph.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`IntelligenceStoreError`] when persistence fails.
+    fn save_intelligence(
+        &self,
+        key: &IntelligenceCacheKey,
+        intelligence: &DocumentIntelligence,
+    ) -> Result<(), IntelligenceStoreError>;
 }
 
 /// Persists source-backed notes without overwriting vault content.
@@ -98,6 +163,7 @@ pub trait ClassificationStore: Send + Sync {
     fn load(
         &self,
         digest: &SourceDigest,
+        key: &ClassificationCacheKey,
     ) -> Result<Option<ClassificationRecord>, ClassificationStoreError>;
 
     /// Inserts or replaces one classification record.
@@ -105,7 +171,128 @@ pub trait ClassificationStore: Send + Sync {
     /// # Errors
     ///
     /// Returns [`ClassificationStoreError`] when persistence fails.
-    fn save(&self, record: &ClassificationRecord) -> Result<(), ClassificationStoreError>;
+    fn save(
+        &self,
+        key: &ClassificationCacheKey,
+        record: &ClassificationRecord,
+    ) -> Result<(), ClassificationStoreError>;
+}
+
+/// Stores resumable classification batch state and attempts.
+pub trait ClassificationRunStore: Send + Sync {
+    /// Starts or resumes one batch.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClassificationStoreError`] when persistence fails.
+    fn begin_batch(&self, batch_id: &str, started_at: &str)
+    -> Result<(), ClassificationStoreError>;
+
+    /// Saves one durable attempt checkpoint.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClassificationStoreError`] when persistence fails.
+    fn save_attempt(
+        &self,
+        attempt: &ClassificationAttemptRecord,
+    ) -> Result<(), ClassificationStoreError>;
+
+    /// Returns the latest attempt per source path.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClassificationStoreError`] when persistence fails.
+    fn latest_attempts(
+        &self,
+        batch_id: &str,
+    ) -> Result<Vec<ClassificationAttemptRecord>, ClassificationStoreError>;
+
+    /// Persists final counters and completion time.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClassificationStoreError`] when persistence fails.
+    fn finish_batch(
+        &self,
+        summary: &ClassificationBatchSummary,
+    ) -> Result<(), ClassificationStoreError>;
+}
+
+impl<T> ClassificationStore for Arc<T>
+where
+    T: ClassificationStore + ?Sized,
+{
+    fn load(
+        &self,
+        digest: &SourceDigest,
+        key: &ClassificationCacheKey,
+    ) -> Result<Option<ClassificationRecord>, ClassificationStoreError> {
+        (**self).load(digest, key)
+    }
+
+    fn save(
+        &self,
+        key: &ClassificationCacheKey,
+        record: &ClassificationRecord,
+    ) -> Result<(), ClassificationStoreError> {
+        (**self).save(key, record)
+    }
+}
+
+impl<T> ClassificationRunStore for Arc<T>
+where
+    T: ClassificationRunStore + ?Sized,
+{
+    fn begin_batch(
+        &self,
+        batch_id: &str,
+        started_at: &str,
+    ) -> Result<(), ClassificationStoreError> {
+        (**self).begin_batch(batch_id, started_at)
+    }
+
+    fn save_attempt(
+        &self,
+        attempt: &ClassificationAttemptRecord,
+    ) -> Result<(), ClassificationStoreError> {
+        (**self).save_attempt(attempt)
+    }
+
+    fn latest_attempts(
+        &self,
+        batch_id: &str,
+    ) -> Result<Vec<ClassificationAttemptRecord>, ClassificationStoreError> {
+        (**self).latest_attempts(batch_id)
+    }
+
+    fn finish_batch(
+        &self,
+        summary: &ClassificationBatchSummary,
+    ) -> Result<(), ClassificationStoreError> {
+        (**self).finish_batch(summary)
+    }
+}
+
+impl<T> DocumentIntelligenceStore for Arc<T>
+where
+    T: DocumentIntelligenceStore + ?Sized,
+{
+    fn load_intelligence(
+        &self,
+        digest: &SourceDigest,
+        key: &IntelligenceCacheKey,
+    ) -> Result<Option<DocumentIntelligence>, IntelligenceStoreError> {
+        (**self).load_intelligence(digest, key)
+    }
+
+    fn save_intelligence(
+        &self,
+        key: &IntelligenceCacheKey,
+        intelligence: &DocumentIntelligence,
+    ) -> Result<(), IntelligenceStoreError> {
+        (**self).save_intelligence(key, intelligence)
+    }
 }
 
 /// Refreshes local vault search indexes.
@@ -124,6 +311,11 @@ pub struct IngestionStoreError(pub String);
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 #[error("classification store failed: {0}")]
 pub struct ClassificationStoreError(pub String);
+
+/// Document intelligence persistence failures.
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[error("document intelligence store failed: {0}")]
+pub struct IntelligenceStoreError(pub String);
 
 /// Vault indexing failures.
 #[derive(Debug, Error, Clone, PartialEq, Eq)]

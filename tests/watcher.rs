@@ -1,3 +1,5 @@
+//! Tests stability tracking and inbox-boundary enforcement for watched files.
+
 use std::io::Write;
 
 use episteme::watch::{StableFileTracker, WatchDecision};

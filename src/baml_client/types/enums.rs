@@ -3,4 +3,341 @@
 //
 // Learn more at https://docs.boundaryml.com
 
-// No enums defined
+//! Generated enum types.
+
+use baml::{
+    __internal::serde::{Deserialize, Serialize},
+    BamlDecode, BamlEncode,
+};
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
+pub enum ClaimKind {
+    Fact,
+
+    Inference,
+
+    Recommendation,
+
+    Critique,
+}
+
+impl ::std::default::Default for ClaimKind {
+    fn default() -> Self {
+        Self::Fact
+    }
+}
+
+impl ::std::fmt::Display for ClaimKind {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match self {
+            Self::Fact => write!(f, "Fact"),
+
+            Self::Inference => write!(f, "Inference"),
+
+            Self::Recommendation => write!(f, "Recommendation"),
+
+            Self::Critique => write!(f, "Critique"),
+        }
+    }
+}
+
+impl ::std::str::FromStr for ClaimKind {
+    type Err = ();
+
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
+        match s {
+            "Fact" => ::std::result::Result::Ok(Self::Fact),
+
+            "Inference" => ::std::result::Result::Ok(Self::Inference),
+
+            "Recommendation" => ::std::result::Result::Ok(Self::Recommendation),
+
+            "Critique" => ::std::result::Result::Ok(Self::Critique),
+
+            _ => ::std::result::Result::Err(()),
+        }
+    }
+}
+
+impl ::std::convert::AsRef<ClaimKind> for ClaimKind {
+    fn as_ref(&self) -> &ClaimKind {
+        self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
+pub enum DocumentSourceType {
+    ResearchPaper,
+
+    Report,
+
+    Article,
+
+    Documentation,
+
+    Website,
+
+    SourceCode,
+
+    Repository,
+
+    Specification,
+
+    Tutorial,
+
+    PersonalProfile,
+
+    Other,
+}
+
+impl ::std::default::Default for DocumentSourceType {
+    fn default() -> Self {
+        Self::ResearchPaper
+    }
+}
+
+impl ::std::fmt::Display for DocumentSourceType {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match self {
+            Self::ResearchPaper => write!(f, "ResearchPaper"),
+
+            Self::Report => write!(f, "Report"),
+
+            Self::Article => write!(f, "Article"),
+
+            Self::Documentation => write!(f, "Documentation"),
+
+            Self::Website => write!(f, "Website"),
+
+            Self::SourceCode => write!(f, "SourceCode"),
+
+            Self::Repository => write!(f, "Repository"),
+
+            Self::Specification => write!(f, "Specification"),
+
+            Self::Tutorial => write!(f, "Tutorial"),
+
+            Self::PersonalProfile => write!(f, "PersonalProfile"),
+
+            Self::Other => write!(f, "Other"),
+        }
+    }
+}
+
+impl ::std::str::FromStr for DocumentSourceType {
+    type Err = ();
+
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
+        match s {
+            "ResearchPaper" => ::std::result::Result::Ok(Self::ResearchPaper),
+
+            "Report" => ::std::result::Result::Ok(Self::Report),
+
+            "Article" => ::std::result::Result::Ok(Self::Article),
+
+            "Documentation" => ::std::result::Result::Ok(Self::Documentation),
+
+            "Website" => ::std::result::Result::Ok(Self::Website),
+
+            "SourceCode" => ::std::result::Result::Ok(Self::SourceCode),
+
+            "Repository" => ::std::result::Result::Ok(Self::Repository),
+
+            "Specification" => ::std::result::Result::Ok(Self::Specification),
+
+            "Tutorial" => ::std::result::Result::Ok(Self::Tutorial),
+
+            "PersonalProfile" => ::std::result::Result::Ok(Self::PersonalProfile),
+
+            "Other" => ::std::result::Result::Ok(Self::Other),
+
+            _ => ::std::result::Result::Err(()),
+        }
+    }
+}
+
+impl ::std::convert::AsRef<DocumentSourceType> for DocumentSourceType {
+    fn as_ref(&self) -> &DocumentSourceType {
+        self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
+pub enum EntityKind {
+    Person,
+
+    Organization,
+
+    Project,
+
+    Technology,
+
+    Concept,
+
+    Method,
+
+    Dataset,
+
+    Benchmark,
+
+    Document,
+}
+
+impl ::std::default::Default for EntityKind {
+    fn default() -> Self {
+        Self::Person
+    }
+}
+
+impl ::std::fmt::Display for EntityKind {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match self {
+            Self::Person => write!(f, "Person"),
+
+            Self::Organization => write!(f, "Organization"),
+
+            Self::Project => write!(f, "Project"),
+
+            Self::Technology => write!(f, "Technology"),
+
+            Self::Concept => write!(f, "Concept"),
+
+            Self::Method => write!(f, "Method"),
+
+            Self::Dataset => write!(f, "Dataset"),
+
+            Self::Benchmark => write!(f, "Benchmark"),
+
+            Self::Document => write!(f, "Document"),
+        }
+    }
+}
+
+impl ::std::str::FromStr for EntityKind {
+    type Err = ();
+
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
+        match s {
+            "Person" => ::std::result::Result::Ok(Self::Person),
+
+            "Organization" => ::std::result::Result::Ok(Self::Organization),
+
+            "Project" => ::std::result::Result::Ok(Self::Project),
+
+            "Technology" => ::std::result::Result::Ok(Self::Technology),
+
+            "Concept" => ::std::result::Result::Ok(Self::Concept),
+
+            "Method" => ::std::result::Result::Ok(Self::Method),
+
+            "Dataset" => ::std::result::Result::Ok(Self::Dataset),
+
+            "Benchmark" => ::std::result::Result::Ok(Self::Benchmark),
+
+            "Document" => ::std::result::Result::Ok(Self::Document),
+
+            _ => ::std::result::Result::Err(()),
+        }
+    }
+}
+
+impl ::std::convert::AsRef<EntityKind> for EntityKind {
+    fn as_ref(&self) -> &EntityKind {
+        self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
+pub enum SemanticRelationType {
+    Supports,
+
+    Contradicts,
+
+    Implements,
+
+    Evaluates,
+
+    DependsOn,
+
+    Extends,
+
+    Uses,
+
+    Causes,
+
+    PartOf,
+
+    EvolvesFrom,
+}
+
+impl ::std::default::Default for SemanticRelationType {
+    fn default() -> Self {
+        Self::Supports
+    }
+}
+
+impl ::std::fmt::Display for SemanticRelationType {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match self {
+            Self::Supports => write!(f, "Supports"),
+
+            Self::Contradicts => write!(f, "Contradicts"),
+
+            Self::Implements => write!(f, "Implements"),
+
+            Self::Evaluates => write!(f, "Evaluates"),
+
+            Self::DependsOn => write!(f, "DependsOn"),
+
+            Self::Extends => write!(f, "Extends"),
+
+            Self::Uses => write!(f, "Uses"),
+
+            Self::Causes => write!(f, "Causes"),
+
+            Self::PartOf => write!(f, "PartOf"),
+
+            Self::EvolvesFrom => write!(f, "EvolvesFrom"),
+        }
+    }
+}
+
+impl ::std::str::FromStr for SemanticRelationType {
+    type Err = ();
+
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
+        match s {
+            "Supports" => ::std::result::Result::Ok(Self::Supports),
+
+            "Contradicts" => ::std::result::Result::Ok(Self::Contradicts),
+
+            "Implements" => ::std::result::Result::Ok(Self::Implements),
+
+            "Evaluates" => ::std::result::Result::Ok(Self::Evaluates),
+
+            "DependsOn" => ::std::result::Result::Ok(Self::DependsOn),
+
+            "Extends" => ::std::result::Result::Ok(Self::Extends),
+
+            "Uses" => ::std::result::Result::Ok(Self::Uses),
+
+            "Causes" => ::std::result::Result::Ok(Self::Causes),
+
+            "PartOf" => ::std::result::Result::Ok(Self::PartOf),
+
+            "EvolvesFrom" => ::std::result::Result::Ok(Self::EvolvesFrom),
+
+            _ => ::std::result::Result::Err(()),
+        }
+    }
+}
+
+impl ::std::convert::AsRef<SemanticRelationType> for SemanticRelationType {
+    fn as_ref(&self) -> &SemanticRelationType {
+        self
+    }
+}

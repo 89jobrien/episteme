@@ -57,6 +57,15 @@ impl TypeBuilder {
         )
     }
 
+    /// Access the `ClaimOutput` class builder.
+    pub fn ClaimOutput(&self) -> ClaimOutputClassBuilder {
+        ClaimOutputClassBuilder::new(
+            self.inner
+                .get_class("ClaimOutput")
+                .expect("class ClaimOutput is defined in schema"),
+        )
+    }
+
     /// Access the `DocumentClassification` class builder.
     pub fn DocumentClassification(&self) -> DocumentClassificationClassBuilder {
         DocumentClassificationClassBuilder::new(
@@ -66,12 +75,39 @@ impl TypeBuilder {
         )
     }
 
+    /// Access the `DocumentIntelligenceOutput` class builder.
+    pub fn DocumentIntelligenceOutput(&self) -> DocumentIntelligenceOutputClassBuilder {
+        DocumentIntelligenceOutputClassBuilder::new(
+            self.inner
+                .get_class("DocumentIntelligenceOutput")
+                .expect("class DocumentIntelligenceOutput is defined in schema"),
+        )
+    }
+
+    /// Access the `EntityOutput` class builder.
+    pub fn EntityOutput(&self) -> EntityOutputClassBuilder {
+        EntityOutputClassBuilder::new(
+            self.inner
+                .get_class("EntityOutput")
+                .expect("class EntityOutput is defined in schema"),
+        )
+    }
+
     /// Access the `EvidenceReferenceOutput` class builder.
     pub fn EvidenceReferenceOutput(&self) -> EvidenceReferenceOutputClassBuilder {
         EvidenceReferenceOutputClassBuilder::new(
             self.inner
                 .get_class("EvidenceReferenceOutput")
                 .expect("class EvidenceReferenceOutput is defined in schema"),
+        )
+    }
+
+    /// Access the `IntelligenceChunkOutput` class builder.
+    pub fn IntelligenceChunkOutput(&self) -> IntelligenceChunkOutputClassBuilder {
+        IntelligenceChunkOutputClassBuilder::new(
+            self.inner
+                .get_class("IntelligenceChunkOutput")
+                .expect("class IntelligenceChunkOutput is defined in schema"),
         )
     }
 
@@ -93,6 +129,15 @@ impl TypeBuilder {
         )
     }
 
+    /// Access the `SemanticRelationOutput` class builder.
+    pub fn SemanticRelationOutput(&self) -> SemanticRelationOutputClassBuilder {
+        SemanticRelationOutputClassBuilder::new(
+            self.inner
+                .get_class("SemanticRelationOutput")
+                .expect("class SemanticRelationOutput is defined in schema"),
+        )
+    }
+
     /// Access the `SourceSpanInput` class builder.
     pub fn SourceSpanInput(&self) -> SourceSpanInputClassBuilder {
         SourceSpanInputClassBuilder::new(
@@ -105,6 +150,42 @@ impl TypeBuilder {
     // =========================================================================
     // Schema Enum Accessors (1:1 with schema enum names)
     // =========================================================================
+
+    /// Access the `ClaimKind` enum builder.
+    pub fn ClaimKind(&self) -> ClaimKindEnumBuilder {
+        ClaimKindEnumBuilder::new(
+            self.inner
+                .get_enum("ClaimKind")
+                .expect("enum ClaimKind is defined in schema"),
+        )
+    }
+
+    /// Access the `DocumentSourceType` enum builder.
+    pub fn DocumentSourceType(&self) -> DocumentSourceTypeEnumBuilder {
+        DocumentSourceTypeEnumBuilder::new(
+            self.inner
+                .get_enum("DocumentSourceType")
+                .expect("enum DocumentSourceType is defined in schema"),
+        )
+    }
+
+    /// Access the `EntityKind` enum builder.
+    pub fn EntityKind(&self) -> EntityKindEnumBuilder {
+        EntityKindEnumBuilder::new(
+            self.inner
+                .get_enum("EntityKind")
+                .expect("enum EntityKind is defined in schema"),
+        )
+    }
+
+    /// Access the `SemanticRelationType` enum builder.
+    pub fn SemanticRelationType(&self) -> SemanticRelationTypeEnumBuilder {
+        SemanticRelationTypeEnumBuilder::new(
+            self.inner
+                .get_enum("SemanticRelationType")
+                .expect("enum SemanticRelationType is defined in schema"),
+        )
+    }
 
     // =========================================================================
     // Primitive Types (all infallible)

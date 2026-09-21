@@ -1,3 +1,5 @@
+//! Tests validation of source digests and safe source file names.
+
 use episteme::domain::{SourceDigest, SourceFileName};
 
 #[test]

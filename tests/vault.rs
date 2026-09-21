@@ -1,3 +1,5 @@
+//! Tests atomic note creation, content sanitization, and source archiving.
+
 use episteme::adapters::VaultFileStore;
 use episteme::domain::{
     AnalysisProvenance, DocumentKind, EvidenceReference, ExtractionMethod, ResearchDraft,

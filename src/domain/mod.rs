@@ -1,5 +1,6 @@
 //! Domain types and invariants.
 
+use std::collections::HashSet;
 use std::fmt;
 use std::path::{Component, Path, PathBuf};
 use std::str::FromStr;
@@ -342,11 +343,80 @@ pub struct DocumentClassification {
     /// Source-supported author names, when present.
     pub authors: Vec<String>,
     /// Broad source format or publication category.
-    pub source_type: String,
-    /// Detected source language.
-    pub language: String,
+    pub source_type: DocumentSourceType,
+    /// Detected human-language ISO 639-1 code.
+    pub language_code: String,
     /// Topic labels supported by the source.
     pub topics: Vec<String>,
+}
+
+/// Canonical document source category.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DocumentSourceType {
+    /// Academic or scientific paper.
+    ResearchPaper,
+    /// Technical, operational, or analytical report.
+    Report,
+    /// Article or essay.
+    Article,
+    /// Reference or explanatory documentation.
+    Documentation,
+    /// Web page that does not fit a narrower category.
+    Website,
+    /// Source code or code listing.
+    SourceCode,
+    /// Software repository overview.
+    Repository,
+    /// Formal specification or request for comments.
+    Specification,
+    /// Tutorial or guided learning material.
+    Tutorial,
+    /// Professional profile or persona report.
+    PersonalProfile,
+    /// Source whose category cannot be established safely.
+    Other,
+}
+
+impl DocumentSourceType {
+    /// Returns the stable persisted representation.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ResearchPaper => "research_paper",
+            Self::Report => "report",
+            Self::Article => "article",
+            Self::Documentation => "documentation",
+            Self::Website => "website",
+            Self::SourceCode => "source_code",
+            Self::Repository => "repository",
+            Self::Specification => "specification",
+            Self::Tutorial => "tutorial",
+            Self::PersonalProfile => "personal_profile",
+            Self::Other => "other",
+        }
+    }
+}
+
+impl FromStr for DocumentSourceType {
+    type Err = DomainError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "research_paper" => Ok(Self::ResearchPaper),
+            "report" => Ok(Self::Report),
+            "article" => Ok(Self::Article),
+            "documentation" => Ok(Self::Documentation),
+            "website" => Ok(Self::Website),
+            "source_code" => Ok(Self::SourceCode),
+            "repository" => Ok(Self::Repository),
+            "specification" => Ok(Self::Specification),
+            "tutorial" => Ok(Self::Tutorial),
+            "personal_profile" => Ok(Self::PersonalProfile),
+            "other" => Ok(Self::Other),
+            _ => Err(DomainError::InvalidClassification),
+        }
+    }
 }
 
 /// Persisted classification with source, extraction, and inference provenance.
@@ -362,6 +432,605 @@ pub struct ClassificationRecord {
     pub classification: DocumentClassification,
     /// Local inference provenance.
     pub analysis: AnalysisProvenance,
+}
+
+/// Safe category for one classification failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ClassificationFailureCode {
+    /// Source staging failed.
+    Staging,
+    /// Deterministic extraction failed.
+    Extraction,
+    /// A configured local endpoint was unavailable.
+    EndpointUnavailable,
+    /// The endpoint did not advertise the configured model.
+    ModelUnavailable,
+    /// No profile accepted the extracted input size.
+    InputTooLarge,
+    /// The model rejected input exceeding its context.
+    ContextOverflow,
+    /// A local model request failed for another reason.
+    ModelRequest,
+    /// Generated output violated classification policy.
+    InvalidOutput,
+    /// Derived-state persistence failed.
+    Persistence,
+}
+
+impl ClassificationFailureCode {
+    /// Returns the stable persisted representation.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Staging => "staging",
+            Self::Extraction => "extraction",
+            Self::EndpointUnavailable => "endpoint_unavailable",
+            Self::ModelUnavailable => "model_unavailable",
+            Self::InputTooLarge => "input_too_large",
+            Self::ContextOverflow => "context_overflow",
+            Self::ModelRequest => "model_request",
+            Self::InvalidOutput => "invalid_output",
+            Self::Persistence => "persistence",
+        }
+    }
+}
+
+impl FromStr for ClassificationFailureCode {
+    type Err = DomainError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "staging" => Ok(Self::Staging),
+            "extraction" => Ok(Self::Extraction),
+            "endpoint_unavailable" => Ok(Self::EndpointUnavailable),
+            "model_unavailable" => Ok(Self::ModelUnavailable),
+            "input_too_large" => Ok(Self::InputTooLarge),
+            "context_overflow" => Ok(Self::ContextOverflow),
+            "model_request" => Ok(Self::ModelRequest),
+            "invalid_output" => Ok(Self::InvalidOutput),
+            "persistence" => Ok(Self::Persistence),
+            _ => Err(DomainError::InvalidClassification),
+        }
+    }
+}
+
+/// Content-free failure returned by classification ports and services.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Error)]
+#[error("{message}")]
+pub struct ClassificationFailure {
+    /// Stable machine-readable category.
+    pub code: ClassificationFailureCode,
+    /// Bounded message without source content, response bodies, paths, or backtraces.
+    pub message: String,
+    /// Whether retrying this operation may succeed.
+    pub retryable: bool,
+    /// Selected model when a model attempt occurred.
+    pub model: Option<String>,
+    /// Extracted Unicode scalar count when known.
+    pub extracted_characters: Option<u64>,
+}
+
+impl ClassificationFailure {
+    /// Creates a retryable content-free failure.
+    #[must_use]
+    pub fn retryable(code: ClassificationFailureCode, message: impl AsRef<str>) -> Self {
+        Self::new(code, message.as_ref(), true)
+    }
+
+    /// Creates a terminal content-free failure.
+    #[must_use]
+    pub fn terminal(code: ClassificationFailureCode, message: impl AsRef<str>) -> Self {
+        Self::new(code, message.as_ref(), false)
+    }
+
+    fn new(code: ClassificationFailureCode, message: &str, retryable: bool) -> Self {
+        let message = message
+            .chars()
+            .map(|character| {
+                if character.is_control() {
+                    ' '
+                } else {
+                    character
+                }
+            })
+            .take(512)
+            .collect::<String>();
+        Self {
+            code,
+            message,
+            retryable,
+            model: None,
+            extracted_characters: None,
+        }
+    }
+
+    /// Adds safe model and input-size context to this failure.
+    #[must_use]
+    pub fn with_context(mut self, model: impl Into<String>, extracted_characters: u64) -> Self {
+        self.model = Some(model.into());
+        self.extracted_characters = Some(extracted_characters);
+        self
+    }
+
+    /// Adds safe input-size context when no model was selected.
+    #[must_use]
+    pub const fn with_extracted_characters(mut self, extracted_characters: u64) -> Self {
+        self.extracted_characters = Some(extracted_characters);
+        self
+    }
+}
+
+/// Successful classification plus selected-model provenance and metrics.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClassificationOutcome {
+    /// Normalized classification metadata.
+    pub classification: DocumentClassification,
+    /// Selected local model provenance.
+    pub analysis: AnalysisProvenance,
+    /// Number of extracted Unicode scalar values sent for classification.
+    pub extracted_characters: u64,
+}
+
+/// Identifies one reusable model/policy classification result.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ClassificationCacheKey {
+    /// Selected model identifier.
+    pub model: String,
+    /// Classification contract version.
+    pub policy_version: String,
+}
+
+/// Durable status of one classification attempt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ClassificationAttemptStatus {
+    /// Work is known but not started.
+    Pending,
+    /// Work is currently executing.
+    Running,
+    /// Inference succeeded and was persisted.
+    Succeeded,
+    /// Work failed and may succeed on retry.
+    FailedRetryable,
+    /// Work failed terminally.
+    FailedTerminal,
+    /// A matching versioned cache record was reused.
+    Cached,
+}
+
+impl ClassificationAttemptStatus {
+    /// Returns the stable persisted representation.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Running => "running",
+            Self::Succeeded => "succeeded",
+            Self::FailedRetryable => "failed_retryable",
+            Self::FailedTerminal => "failed_terminal",
+            Self::Cached => "cached",
+        }
+    }
+}
+
+impl FromStr for ClassificationAttemptStatus {
+    type Err = DomainError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "pending" => Ok(Self::Pending),
+            "running" => Ok(Self::Running),
+            "succeeded" => Ok(Self::Succeeded),
+            "failed_retryable" => Ok(Self::FailedRetryable),
+            "failed_terminal" => Ok(Self::FailedTerminal),
+            "cached" => Ok(Self::Cached),
+            _ => Err(DomainError::InvalidClassification),
+        }
+    }
+}
+
+/// Durable, content-free metrics for one batch attempt.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClassificationAttemptRecord {
+    /// Batch identity.
+    pub batch_id: String,
+    /// Inbox-relative source path.
+    pub source_path: String,
+    /// Source content identity when staging succeeded.
+    pub source_digest: Option<SourceDigest>,
+    /// One-based attempt number for this source in this batch.
+    pub attempt: u32,
+    /// Durable attempt status.
+    pub status: ClassificationAttemptStatus,
+    /// Selected model when known.
+    pub model: Option<String>,
+    /// Extracted Unicode scalar count when known.
+    pub extracted_characters: Option<u64>,
+    /// Attempt wall-clock duration.
+    pub duration_ms: u64,
+    /// Safe machine-readable failure category.
+    pub failure_code: Option<ClassificationFailureCode>,
+    /// Bounded content-free failure message.
+    pub failure_message: Option<String>,
+    /// RFC 3339 update timestamp.
+    pub updated_at: String,
+}
+
+/// Reconciled final status for one classification batch.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClassificationBatchSummary {
+    /// Batch identity.
+    pub batch_id: String,
+    /// Number of discovered sources.
+    pub total: usize,
+    /// Number newly classified successfully.
+    pub succeeded: usize,
+    /// Number served by matching versioned cache entries.
+    pub cached: usize,
+    /// Number with retryable final failures.
+    pub failed_retryable: usize,
+    /// Number with terminal final failures.
+    pub failed_terminal: usize,
+    /// Latest attempt per source, sorted by relative path.
+    pub attempts: Vec<ClassificationAttemptRecord>,
+}
+
+/// One safely staged or rejected source discovered for batch classification.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ClassificationBatchSource {
+    /// A source ready for extraction and inference.
+    Ready {
+        /// Inbox-relative source path.
+        relative_path: String,
+        /// Immutable staged source.
+        source: StagedSource,
+    },
+    /// A source rejected during discovery or staging.
+    Rejected {
+        /// Inbox-relative source path.
+        relative_path: String,
+        /// Content-free staging failure.
+        failure: ClassificationFailure,
+    },
+}
+
+/// Semantic category of one extracted claim.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ClaimKind {
+    Fact,
+    Inference,
+    Recommendation,
+    Critique,
+}
+
+impl ClaimKind {
+    /// Returns the stable serialized claim-kind label.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Fact => "fact",
+            Self::Inference => "inference",
+            Self::Recommendation => "recommendation",
+            Self::Critique => "critique",
+        }
+    }
+}
+
+/// Canonical graph entity category.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EntityKind {
+    Person,
+    Organization,
+    Project,
+    Technology,
+    Concept,
+    Method,
+    Dataset,
+    Benchmark,
+    Document,
+}
+
+impl EntityKind {
+    /// Returns the stable serialized entity-kind label.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Person => "person",
+            Self::Organization => "organization",
+            Self::Project => "project",
+            Self::Technology => "technology",
+            Self::Concept => "concept",
+            Self::Method => "method",
+            Self::Dataset => "dataset",
+            Self::Benchmark => "benchmark",
+            Self::Document => "document",
+        }
+    }
+}
+
+/// Canonical semantic edge category.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SemanticRelationType {
+    Supports,
+    Contradicts,
+    Implements,
+    Evaluates,
+    DependsOn,
+    Extends,
+    Uses,
+    Causes,
+    PartOf,
+    EvolvesFrom,
+}
+
+impl SemanticRelationType {
+    /// Returns the stable serialized relation-type label.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Supports => "supports",
+            Self::Contradicts => "contradicts",
+            Self::Implements => "implements",
+            Self::Evaluates => "evaluates",
+            Self::DependsOn => "depends_on",
+            Self::Extends => "extends",
+            Self::Uses => "uses",
+            Self::Causes => "causes",
+            Self::PartOf => "part_of",
+            Self::EvolvesFrom => "evolves_from",
+        }
+    }
+}
+
+/// Grounded document summary.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IntelligenceSummary {
+    pub text: String,
+    pub key_points: Vec<String>,
+    pub evidence: Vec<EvidenceReference>,
+}
+
+/// One evidence-grounded claim.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IntelligenceClaim {
+    pub id: String,
+    pub text: String,
+    pub kind: ClaimKind,
+    pub confidence_percent: u8,
+    pub evidence: Vec<EvidenceReference>,
+}
+
+impl IntelligenceClaim {
+    /// Creates a normalized grounded claim.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError::InvalidIntelligence`] for invalid confidence, text, or evidence.
+    pub fn new(
+        text: impl AsRef<str>,
+        kind: ClaimKind,
+        confidence_percent: u8,
+        evidence: Vec<EvidenceReference>,
+    ) -> Result<Self, DomainError> {
+        let text = normalize_whitespace(text.as_ref());
+        validate_intelligence_field(&text, 2_000, confidence_percent, &evidence)?;
+        Ok(Self {
+            id: Self::stable_id(&text),
+            text,
+            kind,
+            confidence_percent,
+            evidence,
+        })
+    }
+
+    /// Derives an identifier from normalized, case-folded claim text.
+    #[must_use]
+    pub fn stable_id(text: &str) -> String {
+        stable_graph_id("claim", &normalize_whitespace(text).to_ascii_lowercase())
+    }
+}
+
+/// One canonical evidence-grounded entity.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IntelligenceEntity {
+    pub id: String,
+    pub name: String,
+    pub aliases: Vec<String>,
+    pub kind: EntityKind,
+    pub description: String,
+    pub evidence: Vec<EvidenceReference>,
+}
+
+impl IntelligenceEntity {
+    /// Creates a normalized grounded entity.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError::InvalidIntelligence`] for invalid names, descriptions, or evidence.
+    pub fn new(
+        name: impl AsRef<str>,
+        kind: EntityKind,
+        description: impl AsRef<str>,
+        evidence: Vec<EvidenceReference>,
+    ) -> Result<Self, DomainError> {
+        let name = normalize_whitespace(name.as_ref());
+        let description = normalize_whitespace(description.as_ref());
+        validate_intelligence_field(&name, 512, 100, &evidence)?;
+        if !valid_metadata(&description, 2_000) {
+            return Err(DomainError::InvalidIntelligence);
+        }
+        Ok(Self {
+            id: Self::stable_id(kind, &name),
+            name,
+            aliases: Vec::new(),
+            kind,
+            description,
+            evidence,
+        })
+    }
+
+    /// Derives an identifier from the entity kind and normalized, case-folded name.
+    #[must_use]
+    pub fn stable_id(kind: EntityKind, name: &str) -> String {
+        stable_graph_id(
+            kind.as_str(),
+            &normalize_whitespace(name).to_ascii_lowercase(),
+        )
+    }
+}
+
+/// One evidence-grounded semantic graph edge.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SemanticRelation {
+    pub id: String,
+    pub source_id: String,
+    pub target_id: String,
+    pub relation_type: SemanticRelationType,
+    pub confidence_percent: u8,
+    pub evidence: Vec<EvidenceReference>,
+}
+
+impl SemanticRelation {
+    /// Creates a normalized grounded semantic relation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError::InvalidIntelligence`] for invalid endpoints, confidence, or evidence.
+    pub fn new(
+        source_id: String,
+        target_id: String,
+        relation_type: SemanticRelationType,
+        confidence_percent: u8,
+        evidence: Vec<EvidenceReference>,
+        source_digest: &SourceDigest,
+    ) -> Result<Self, DomainError> {
+        if source_id == target_id || source_id.is_empty() || target_id.is_empty() {
+            return Err(DomainError::InvalidIntelligence);
+        }
+        validate_intelligence_field("relation", 32, confidence_percent, &evidence)?;
+        let id = stable_graph_id(
+            "relation",
+            &format!(
+                "{}:{}:{}:{}",
+                source_id,
+                relation_type.as_str(),
+                target_id,
+                source_digest.as_str()
+            ),
+        );
+        Ok(Self {
+            id,
+            source_id,
+            target_id,
+            relation_type,
+            confidence_percent,
+            evidence,
+        })
+    }
+}
+
+/// Complete versioned intelligence graph for one document.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DocumentIntelligence {
+    pub source_digest: SourceDigest,
+    pub classification: DocumentClassification,
+    pub summary: IntelligenceSummary,
+    pub claims: Vec<IntelligenceClaim>,
+    pub entities: Vec<IntelligenceEntity>,
+    pub relations: Vec<SemanticRelation>,
+    pub analysis: AnalysisProvenance,
+}
+
+/// Identifies one reusable intelligence model/policy result.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct IntelligenceCacheKey {
+    pub model: String,
+    pub policy_version: String,
+}
+
+impl DocumentIntelligence {
+    /// Validates graph integrity and exact source grounding.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError::InvalidIntelligence`] for unknown nodes or ungrounded evidence.
+    pub fn validate_against(self, source: &str) -> Result<Self, DomainError> {
+        self.classification.clone().normalize()?;
+        if !valid_metadata(&self.summary.text, 8_000)
+            || self.summary.key_points.is_empty()
+            || self.summary.evidence.is_empty()
+        {
+            return Err(DomainError::InvalidIntelligence);
+        }
+        let mut nodes = HashSet::new();
+        if self
+            .claims
+            .iter()
+            .any(|claim| !nodes.insert(claim.id.clone()))
+            || self
+                .entities
+                .iter()
+                .any(|entity| !nodes.insert(entity.id.clone()))
+        {
+            return Err(DomainError::InvalidIntelligence);
+        }
+        if self.relations.iter().any(|relation| {
+            !nodes.contains(&relation.source_id) || !nodes.contains(&relation.target_id)
+        }) {
+            return Err(DomainError::InvalidIntelligence);
+        }
+        let evidence = self
+            .summary
+            .evidence
+            .iter()
+            .chain(self.claims.iter().flat_map(|claim| &claim.evidence))
+            .chain(self.entities.iter().flat_map(|entity| &entity.evidence))
+            .chain(
+                self.relations
+                    .iter()
+                    .flat_map(|relation| &relation.evidence),
+            );
+        if evidence.into_iter().any(|item| {
+            item.quote.trim().is_empty()
+                || item.location.trim().is_empty()
+                || !source.contains(&item.quote)
+        }) {
+            return Err(DomainError::InvalidIntelligence);
+        }
+        Ok(self)
+    }
+}
+
+fn validate_intelligence_field(
+    text: &str,
+    maximum_characters: usize,
+    confidence_percent: u8,
+    evidence: &[EvidenceReference],
+) -> Result<(), DomainError> {
+    if !valid_metadata(text, maximum_characters)
+        || !(60..=100).contains(&confidence_percent)
+        || evidence.is_empty()
+    {
+        return Err(DomainError::InvalidIntelligence);
+    }
+    Ok(())
+}
+
+fn stable_graph_id(namespace: &str, value: &str) -> String {
+    blake3::hash(format!("{namespace}:{value}").as_bytes())
+        .to_hex()
+        .to_string()
+}
+
+/// Models advertised by one local endpoint probe.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelAvailability {
+    /// Model identifiers returned by the endpoint, or empty when not exposed.
+    pub advertised_models: Vec<String>,
 }
 
 /// A source location and excerpt supporting generated research content.
@@ -481,6 +1150,62 @@ impl ResearchDraft {
 }
 
 impl DocumentClassification {
+    /// Normalizes bounded metadata and rejects placeholders or prompt leakage.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError::InvalidClassification`] when metadata is unsafe, structurally
+    /// invalid, or contains known schema placeholders.
+    pub fn normalize(mut self) -> Result<Self, DomainError> {
+        let raw_values = std::iter::once(self.title.as_str())
+            .chain(std::iter::once(self.language_code.as_str()))
+            .chain(self.authors.iter().map(String::as_str))
+            .chain(self.topics.iter().map(String::as_str));
+        if raw_values.into_iter().any(|value| {
+            value.chars().any(char::is_control)
+                || value.chars().count() > 512
+                || value.trim().is_empty()
+        }) {
+            return Err(DomainError::InvalidClassification);
+        }
+
+        self.title = normalize_whitespace(&self.title);
+        self.language_code = normalize_whitespace(&self.language_code).to_ascii_lowercase();
+        self.authors = normalize_unique(self.authors, 64, 256)?;
+        self.topics = normalize_unique(self.topics, 64, 128)?
+            .into_iter()
+            .map(|topic| topic.to_ascii_lowercase())
+            .collect();
+
+        let invalid_title = matches!(
+            self.title.to_ascii_lowercase().as_str(),
+            "string" | "document" | "text" | "title" | "unknown" | "untitled"
+        ) || contains_prompt_leakage(&self.title);
+        let invalid_language = !is_iso_639_1(&self.language_code);
+        let invalid_author = self.authors.iter().any(|author| {
+            contains_prompt_leakage(author)
+                || matches!(
+                    author.to_ascii_lowercase().as_str(),
+                    "string" | "author" | "authors" | "unknown"
+                )
+        });
+        let invalid_topic = self.topics.iter().any(|topic| {
+            matches!(
+                topic.as_str(),
+                "string" | "string[]" | "topic" | "topics" | "untrusted source data"
+            ) || contains_prompt_leakage(topic)
+        });
+        if invalid_title
+            || invalid_language
+            || invalid_author
+            || invalid_topic
+            || self.topics.is_empty()
+        {
+            return Err(DomainError::InvalidClassification);
+        }
+        Ok(self)
+    }
+
     /// Validates required classification fields.
     ///
     /// # Errors
@@ -488,22 +1213,49 @@ impl DocumentClassification {
     /// Returns [`DomainError::InvalidClassification`] when required scalar fields or topics are
     /// empty, contain control characters, exceed metadata limits, or contain invalid list items.
     pub fn validate(self) -> Result<Self, DomainError> {
-        let scalar_fields_valid = valid_metadata(&self.title, 512)
-            && valid_metadata(&self.source_type, 128)
-            && valid_metadata(&self.language, 64);
-        let lists_valid = self.authors.len() <= 64
-            && !self.topics.is_empty()
-            && self.topics.len() <= 64
-            && self
-                .authors
-                .iter()
-                .all(|author| valid_metadata(author, 256))
-            && self.topics.iter().all(|topic| valid_metadata(topic, 128));
-        if !scalar_fields_valid || !lists_valid {
+        self.normalize()
+    }
+}
+
+fn normalize_unique(
+    values: Vec<String>,
+    maximum_items: usize,
+    maximum_characters: usize,
+) -> Result<Vec<String>, DomainError> {
+    if values.len() > maximum_items {
+        return Err(DomainError::InvalidClassification);
+    }
+    let mut seen = HashSet::new();
+    let mut normalized = Vec::new();
+    for value in values {
+        let value = normalize_whitespace(&value);
+        if !valid_metadata(&value, maximum_characters) {
             return Err(DomainError::InvalidClassification);
         }
-        Ok(self)
+        if seen.insert(value.to_ascii_lowercase()) {
+            normalized.push(value);
+        }
     }
+    Ok(normalized)
+}
+
+fn contains_prompt_leakage(value: &str) -> bool {
+    let value = value.to_ascii_lowercase();
+    ['<', '>'].iter().any(|marker| value.contains(*marker))
+        || [
+            "source_document",
+            "source_spans",
+            "output_format",
+            "untrusted source",
+            "schema placeholder",
+        ]
+        .iter()
+        .any(|marker| value.contains(marker))
+}
+
+fn is_iso_639_1(value: &str) -> bool {
+    const CODES: &str = "aa ab ae af ak am an ar as av ay az ba be bg bh bi bm bn bo br bs ca ce ch co cr cs cu cv cy da de dv dz ee el en eo es et eu fa ff fi fj fo fr fy ga gd gl gn gu gv ha he hi ho hr ht hu hy hz ia id ie ig ii ik io is it iu ja jv ka kg ki kj kk kl km kn ko kr ks ku kv kw ky la lb lg li ln lo lt lu lv mg mh mi mk ml mn mr ms mt my na nb nd ne ng nl nn no nr nv ny oc oj om or os pa pi pl ps pt qu rm rn ro ru rw sa sc sd se sg si sk sl sm sn so sq sr ss st su sv sw ta te tg th ti tk tl tn to tr ts tt tw ty ug uk ur uz ve vi vo wa wo xh yi yo za zh zu";
+    value.len() == 2 && CODES.split_ascii_whitespace().any(|code| code == value)
 }
 
 impl ExtractedDocument {
@@ -571,6 +1323,9 @@ pub enum DomainError {
     /// A generated classification lacked required metadata.
     #[error("document classification contains invalid or excessive metadata")]
     InvalidClassification,
+    /// Generated intelligence was ungrounded or structurally invalid.
+    #[error("document intelligence must be grounded and referentially valid")]
+    InvalidIntelligence,
     /// Generated evidence did not occur in extracted source text.
     #[error("research draft contains evidence absent from the source")]
     UngroundedEvidence,

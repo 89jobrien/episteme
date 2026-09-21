@@ -1,5 +1,6 @@
 //! Runtime configuration and safety validation.
 
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
@@ -12,6 +13,17 @@ use url::{Host, Url};
 pub struct LocalModelEndpoint {
     base_url: Url,
     model: String,
+}
+
+/// One ordered local classifier route with an explicit input bound.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClassifierProfile {
+    /// Stable operator-facing profile name.
+    pub name: String,
+    /// Validated loopback-only model endpoint.
+    pub endpoint: LocalModelEndpoint,
+    /// Maximum extracted Unicode scalar values accepted by this profile.
+    pub maximum_input_characters: usize,
 }
 
 /// Explicit paths to required document workflow tools.
@@ -45,7 +57,9 @@ pub struct Settings {
     /// Required external executable paths.
     pub tools: ToolPaths,
     /// Local classifier endpoint.
-    pub classifier: LocalModelEndpoint,
+    pub classifier: ClassifierProfile,
+    /// Ordered local classifier fallback profiles.
+    pub classifier_fallbacks: Vec<ClassifierProfile>,
     /// Local distiller endpoint.
     pub distiller: LocalModelEndpoint,
     /// Minimum direct PDF text characters before OCR fallback.
@@ -69,6 +83,8 @@ struct RawSettings {
     database_path: PathBuf,
     tools: ToolPaths,
     classifier: RawEndpoint,
+    #[serde(default)]
+    classifier_fallbacks: Vec<RawEndpoint>,
     distiller: RawEndpoint,
     minimum_text_characters: usize,
     process_timeout_seconds: u64,
@@ -79,8 +95,12 @@ struct RawSettings {
 
 #[derive(Debug, Deserialize)]
 struct RawEndpoint {
+    #[serde(default)]
+    name: Option<String>,
     base_url: String,
     model: String,
+    #[serde(default)]
+    maximum_input_characters: Option<usize>,
 }
 
 impl Settings {
@@ -120,6 +140,23 @@ impl Settings {
         {
             return Err(SettingsError::InvalidLimit);
         }
+        let classifier = classifier_profile(raw.classifier, "primary", false)?;
+        let classifier_fallbacks = raw
+            .classifier_fallbacks
+            .into_iter()
+            .enumerate()
+            .map(|(index, profile)| {
+                classifier_profile(profile, &format!("fallback-{}", index + 1), true)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut names = HashSet::new();
+        if !names.insert(classifier.name.clone())
+            || classifier_fallbacks
+                .iter()
+                .any(|profile| !names.insert(profile.name.clone()))
+        {
+            return Err(SettingsError::DuplicateClassifierProfile);
+        }
         Ok(Self {
             vault_root: raw.vault_root,
             inbox_directory: raw.inbox_directory,
@@ -127,7 +164,8 @@ impl Settings {
             archive_directory: raw.archive_directory,
             database_path: raw.database_path,
             tools: raw.tools,
-            classifier: LocalModelEndpoint::new(&raw.classifier.base_url, raw.classifier.model)?,
+            classifier,
+            classifier_fallbacks,
             distiller: LocalModelEndpoint::new(&raw.distiller.base_url, raw.distiller.model)?,
             minimum_text_characters: raw.minimum_text_characters,
             process_timeout_seconds: raw.process_timeout_seconds,
@@ -154,6 +192,32 @@ impl Settings {
         })
         .collect()
     }
+}
+
+fn classifier_profile(
+    raw: RawEndpoint,
+    default_name: &str,
+    require_limit: bool,
+) -> Result<ClassifierProfile, SettingsError> {
+    let name = match raw.name {
+        Some(name) => name,
+        None if require_limit => return Err(SettingsError::MissingClassifierProfileName),
+        None => default_name.to_owned(),
+    };
+    if name.trim().is_empty() || name.chars().any(char::is_control) {
+        return Err(SettingsError::InvalidClassifierProfileName);
+    }
+    let maximum_input_characters = match raw.maximum_input_characters {
+        Some(0) => return Err(SettingsError::InvalidLimit),
+        Some(limit) => limit,
+        None if require_limit => return Err(SettingsError::MissingClassifierProfileLimit),
+        None => usize::MAX,
+    };
+    Ok(ClassifierProfile {
+        name,
+        endpoint: LocalModelEndpoint::new(&raw.base_url, raw.model)?,
+        maximum_input_characters,
+    })
 }
 
 fn validate_relative_path(path: &Path) -> Result<(), SettingsError> {
@@ -242,6 +306,18 @@ pub enum SettingsError {
     /// A configured limit was zero.
     #[error("configured limits and intervals must be greater than zero")]
     InvalidLimit,
+    /// A fallback classifier omitted its required input limit.
+    #[error("fallback classifier profiles require maximum_input_characters")]
+    MissingClassifierProfileLimit,
+    /// A fallback classifier omitted its required stable name.
+    #[error("fallback classifier profiles require an explicit name")]
+    MissingClassifierProfileName,
+    /// A classifier profile name was empty or unsafe.
+    #[error("classifier profile name must be non-empty and contain no control characters")]
+    InvalidClassifierProfileName,
+    /// Classifier profile names were not unique.
+    #[error("classifier profile names must be unique")]
+    DuplicateClassifierProfile,
     /// A tool path was not explicit and absolute.
     #[error("tool path must be absolute: {0}")]
     UnsafeToolPath(String),

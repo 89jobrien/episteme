@@ -129,6 +129,8 @@ macro_rules! baml_function_async {
 // Generate function structs
 // =============================================================================
 
+baml_function_async!(AggregateDocumentIntelligence(classification: &types::DocumentClassification, chunks: &[types::IntelligenceChunkOutput], ) -> (stream_types::DocumentIntelligenceOutput, types::DocumentIntelligenceOutput));
+
 baml_function_async!(AggregateResearchChunks(classification: &types::DocumentClassification, chunks: &[types::ResearchChunkOutput], ) -> (stream_types::AggregatedResearchOutput, types::AggregatedResearchOutput));
 
 baml_function_async!(ClassifyDocument(document: impl AsRef<str> + BamlEncode, ) -> (stream_types::DocumentClassification, types::DocumentClassification));
@@ -136,6 +138,8 @@ baml_function_async!(ClassifyDocument(document: impl AsRef<str> + BamlEncode, ) 
 baml_function_async!(DistillResearch(document: impl AsRef<str> + BamlEncode, classification: &types::DocumentClassification, ) -> (stream_types::ResearchDraftOutput, types::ResearchDraftOutput));
 
 baml_function_async!(DistillResearchChunk(spans: &[types::SourceSpanInput], classification: &types::DocumentClassification, ) -> (stream_types::ResearchChunkOutput, types::ResearchChunkOutput));
+
+baml_function_async!(ExtractIntelligenceChunk(spans: &[types::SourceSpanInput], classification: &types::DocumentClassification, ) -> (stream_types::IntelligenceChunkOutput, types::IntelligenceChunkOutput));
 
 // =============================================================================
 // Client Struct
@@ -145,6 +149,8 @@ baml_function_async!(DistillResearchChunk(spans: &[types::SourceSpanInput], clas
 pub struct BamlAsyncClient {
     options: FunctionOptions,
 
+    pub AggregateDocumentIntelligence: AggregateDocumentIntelligence,
+
     pub AggregateResearchChunks: AggregateResearchChunks,
 
     pub ClassifyDocument: ClassifyDocument,
@@ -152,12 +158,16 @@ pub struct BamlAsyncClient {
     pub DistillResearch: DistillResearch,
 
     pub DistillResearchChunk: DistillResearchChunk,
+
+    pub ExtractIntelligenceChunk: ExtractIntelligenceChunk,
 }
 
 impl BamlAsyncClient {
     pub const fn new() -> Self {
         Self {
             options: FunctionOptions::new(),
+
+            AggregateDocumentIntelligence: AggregateDocumentIntelligence::new(),
 
             AggregateResearchChunks: AggregateResearchChunks::new(),
 
@@ -166,6 +176,8 @@ impl BamlAsyncClient {
             DistillResearch: DistillResearch::new(),
 
             DistillResearchChunk: DistillResearchChunk::new(),
+
+            ExtractIntelligenceChunk: ExtractIntelligenceChunk::new(),
         }
     }
 
@@ -173,6 +185,10 @@ impl BamlAsyncClient {
     pub fn with_options(&self, options: FunctionOptions) -> Self {
         Self {
             options: options.clone(),
+
+            AggregateDocumentIntelligence: AggregateDocumentIntelligence {
+                options: options.clone(),
+            },
 
             AggregateResearchChunks: AggregateResearchChunks {
                 options: options.clone(),
@@ -187,6 +203,10 @@ impl BamlAsyncClient {
             },
 
             DistillResearchChunk: DistillResearchChunk {
+                options: options.clone(),
+            },
+
+            ExtractIntelligenceChunk: ExtractIntelligenceChunk {
                 options: options.clone(),
             },
         }

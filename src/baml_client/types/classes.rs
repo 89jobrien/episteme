@@ -32,16 +32,66 @@ impl ::std::convert::AsRef<AggregatedResearchOutput> for AggregatedResearchOutpu
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
 #[serde(crate = "::baml::__internal::serde")]
+pub struct ClaimOutput {
+    pub local_id: String,
+    pub text: String,
+    pub kind: ClaimKind,
+    pub confidence_percent: i64,
+    pub evidence_span_ids: Vec<String>,
+}
+
+impl ::std::convert::AsRef<ClaimOutput> for ClaimOutput {
+    fn as_ref(&self) -> &ClaimOutput {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct DocumentClassification {
     pub title: String,
     pub authors: Vec<String>,
-    pub source_type: String,
-    pub language: String,
+    pub source_type: DocumentSourceType,
+    pub language_code: String,
     pub topics: Vec<String>,
 }
 
 impl ::std::convert::AsRef<DocumentClassification> for DocumentClassification {
     fn as_ref(&self) -> &DocumentClassification {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
+pub struct DocumentIntelligenceOutput {
+    pub summary: String,
+    pub key_points: Vec<String>,
+    pub summary_span_ids: Vec<String>,
+    pub claims: Vec<ClaimOutput>,
+    pub entities: Vec<EntityOutput>,
+    pub relations: Vec<SemanticRelationOutput>,
+}
+
+impl ::std::convert::AsRef<DocumentIntelligenceOutput> for DocumentIntelligenceOutput {
+    fn as_ref(&self) -> &DocumentIntelligenceOutput {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
+pub struct EntityOutput {
+    pub local_id: String,
+    pub name: String,
+    pub aliases: Vec<String>,
+    pub kind: EntityKind,
+    pub description: String,
+    pub evidence_span_ids: Vec<String>,
+}
+
+impl ::std::convert::AsRef<EntityOutput> for EntityOutput {
+    fn as_ref(&self) -> &EntityOutput {
         self
     }
 }
@@ -55,6 +105,23 @@ pub struct EvidenceReferenceOutput {
 
 impl ::std::convert::AsRef<EvidenceReferenceOutput> for EvidenceReferenceOutput {
     fn as_ref(&self) -> &EvidenceReferenceOutput {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
+pub struct IntelligenceChunkOutput {
+    pub summary: String,
+    pub key_points: Vec<String>,
+    pub summary_span_ids: Vec<String>,
+    pub claims: Vec<ClaimOutput>,
+    pub entities: Vec<EntityOutput>,
+    pub relations: Vec<SemanticRelationOutput>,
+}
+
+impl ::std::convert::AsRef<IntelligenceChunkOutput> for IntelligenceChunkOutput {
+    fn as_ref(&self) -> &IntelligenceChunkOutput {
         self
     }
 }
@@ -90,6 +157,22 @@ pub struct ResearchDraftOutput {
 
 impl ::std::convert::AsRef<ResearchDraftOutput> for ResearchDraftOutput {
     fn as_ref(&self) -> &ResearchDraftOutput {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
+pub struct SemanticRelationOutput {
+    pub source_local_id: String,
+    pub target_local_id: String,
+    pub relation_type: SemanticRelationType,
+    pub confidence_percent: i64,
+    pub evidence_span_ids: Vec<String>,
+}
+
+impl ::std::convert::AsRef<SemanticRelationOutput> for SemanticRelationOutput {
+    fn as_ref(&self) -> &SemanticRelationOutput {
         self
     }
 }

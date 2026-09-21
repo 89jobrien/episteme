@@ -8,6 +8,7 @@ pub mod config;
 pub mod doctor;
 pub mod domain;
 pub mod ingest;
+pub mod intelligence;
 pub mod ports;
 pub mod stage;
 pub mod watch;

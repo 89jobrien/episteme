@@ -1,3 +1,5 @@
+//! Tests resumable ingestion stages and guarded vault side effects.
+
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 

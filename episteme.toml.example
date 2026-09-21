@@ -17,8 +17,16 @@ pandoc = "/opt/homebrew/bin/pandoc"
 zk = "/opt/homebrew/bin/zk"
 
 [classifier]
+name = "fast-local"
 base_url = "http://127.0.0.1:18181/v1"
 model = "configured-local-classifier"
+maximum_input_characters = 12000
+
+[[classifier_fallbacks]]
+name = "large-context-local"
+base_url = "http://127.0.0.1:18182/v1"
+model = "configured-large-context-classifier"
+maximum_input_characters = 120000
 
 [distiller]
 base_url = "http://127.0.0.1:18181/v1"

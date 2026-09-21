@@ -1,3 +1,5 @@
+//! Tests rejection of research drafts without source-grounded evidence.
+
 use episteme::domain::{EvidenceReference, ResearchDraft};
 
 #[test]

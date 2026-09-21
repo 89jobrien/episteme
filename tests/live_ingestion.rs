@@ -1,7 +1,11 @@
+//! Runs opt-in local-model workflows against disposable vaults and databases.
+
 use std::fs;
+use std::path::Path;
 
 use assert_cmd::Command;
 use episteme::config::validate_live_test_vault;
+use episteme::domain::ClassificationBatchSummary;
 
 #[test]
 #[ignore = "requires EPISTEME_RUN_LIVE=1 and configured local model endpoints"]
@@ -21,6 +25,115 @@ fn live_chunked_ingestion_uses_source_span_evidence() -> Result<(), Box<dyn std:
         repeated_section.repeat(40)
     );
     run_live_ingestion(&document, true)
+}
+
+#[test]
+#[ignore = "requires EPISTEME_RUN_LIVE=1 and configured local model endpoints"]
+fn live_batch_classification_reconciles_retries() -> Result<(), Box<dyn std::error::Error>> {
+    if std::env::var("EPISTEME_RUN_LIVE").ok().as_deref() != Some("1") {
+        return Err("set EPISTEME_RUN_LIVE=1 to run this test".into());
+    }
+    let classifier_base = required_env("EPISTEME_CLASSIFY_BASE_URL")?;
+    let classifier_model = required_env("EPISTEME_CLASSIFY_MODEL")?;
+    let distiller_base = required_env("EPISTEME_DISTILL_BASE_URL")?;
+    let distiller_model = required_env("EPISTEME_DISTILL_MODEL")?;
+    let directory = tempfile::tempdir()?;
+    let vault = directory.path().join("vault");
+    let database = directory.path().join("episteme.duckdb");
+    let config = directory.path().join("episteme.toml");
+    let first_summary = directory.path().join("classification-summary-1.json");
+    let second_summary = directory.path().join("classification-summary-2.json");
+    fs::create_dir_all(&vault)?;
+    fs::write(
+        &config,
+        format!(
+            r#"
+vault_root = {}
+inbox_directory = "00_Inbox/_Incoming"
+research_directory = "04_Research"
+archive_directory = "09_Archive/Sources"
+database_path = {}
+minimum_text_characters = 50
+process_timeout_seconds = 300
+maximum_output_bytes = 10485760
+maximum_source_bytes = 104857600
+watch_interval_seconds = 1
+
+[tools]
+pdftotext = "/opt/homebrew/bin/pdftotext"
+pdftoppm = "/opt/homebrew/bin/pdftoppm"
+tesseract = "/opt/homebrew/bin/tesseract"
+pandoc = "/opt/homebrew/bin/pandoc"
+zk = "/opt/homebrew/bin/zk"
+
+[classifier]
+name = "unavailable-primary"
+base_url = "http://127.0.0.1:9/v1"
+model = "unavailable"
+maximum_input_characters = 120000
+
+[[classifier_fallbacks]]
+name = "live-fallback"
+base_url = "{}"
+model = "{}"
+maximum_input_characters = 120000
+
+[distiller]
+base_url = "{}"
+model = "{}"
+"#,
+            json_string(&vault.display().to_string())?,
+            json_string(&database.display().to_string())?,
+            classifier_base,
+            classifier_model,
+            distiller_base,
+            distiller_model,
+        ),
+    )?;
+    Command::cargo_bin("episteme")?
+        .args([
+            "--config",
+            config.to_str().ok_or("invalid config path")?,
+            "init",
+        ])
+        .assert()
+        .success();
+    let inbox = vault.join("00_Inbox/_Incoming");
+    fs::write(
+        inbox.join("first.html"),
+        "<html><body><h1>First Report</h1><p>This English report documents local agent systems and deterministic testing.</p></body></html>",
+    )?;
+
+    for (batch_id, summary) in [
+        ("live-batch-1", first_summary.as_path()),
+        ("live-batch-2", second_summary.as_path()),
+    ] {
+        Command::cargo_bin("episteme")?
+            .args([
+                "--config",
+                config.to_str().ok_or("invalid config path")?,
+                "classify-batch",
+                "--batch-id",
+                batch_id,
+                "--retry-failed",
+                "--summary",
+                summary.to_str().ok_or("invalid summary path")?,
+            ])
+            .assert()
+            .success();
+    }
+
+    let reconciled: ClassificationBatchSummary =
+        serde_json::from_str(&fs::read_to_string(second_summary)?)?;
+    assert_eq!(reconciled.total, 1);
+    assert_eq!(reconciled.cached, 1, "{reconciled:#?}");
+    assert!(
+        reconciled
+            .attempts
+            .iter()
+            .all(|attempt| !Path::new(&attempt.source_path).is_absolute())
+    );
+    Ok(())
 }
 
 fn run_live_ingestion(

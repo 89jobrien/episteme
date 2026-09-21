@@ -23,13 +23,23 @@ use baml::__internal::serde;
 pub enum StreamTypes {
     AggregatedResearchOutput(AggregatedResearchOutput),
 
+    ClaimOutput(ClaimOutput),
+
     DocumentClassification(DocumentClassification),
 
+    DocumentIntelligenceOutput(DocumentIntelligenceOutput),
+
+    EntityOutput(EntityOutput),
+
     EvidenceReferenceOutput(EvidenceReferenceOutput),
+
+    IntelligenceChunkOutput(IntelligenceChunkOutput),
 
     ResearchChunkOutput(ResearchChunkOutput),
 
     ResearchDraftOutput(ResearchDraftOutput),
+
+    SemanticRelationOutput(SemanticRelationOutput),
 
     SourceSpanInput(SourceSpanInput),
 }
@@ -43,13 +53,23 @@ impl baml::KnownTypes for StreamTypes {
         match self {
             StreamTypes::AggregatedResearchOutput(_) => "AggregatedResearchOutput",
 
+            StreamTypes::ClaimOutput(_) => "ClaimOutput",
+
             StreamTypes::DocumentClassification(_) => "DocumentClassification",
 
+            StreamTypes::DocumentIntelligenceOutput(_) => "DocumentIntelligenceOutput",
+
+            StreamTypes::EntityOutput(_) => "EntityOutput",
+
             StreamTypes::EvidenceReferenceOutput(_) => "EvidenceReferenceOutput",
+
+            StreamTypes::IntelligenceChunkOutput(_) => "IntelligenceChunkOutput",
 
             StreamTypes::ResearchChunkOutput(_) => "ResearchChunkOutput",
 
             StreamTypes::ResearchDraftOutput(_) => "ResearchDraftOutput",
+
+            StreamTypes::SemanticRelationOutput(_) => "SemanticRelationOutput",
 
             StreamTypes::SourceSpanInput(_) => "SourceSpanInput",
         }
