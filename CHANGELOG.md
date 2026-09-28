@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+- Add native resumable batch classification with bounded concurrency, force refresh, retry controls,
+  automatic local classifier fallback, durable attempt metrics, and atomic reconciled summaries.
+- Add model-aware versioned classification caching and redirect-free loopback endpoint preflight.
+- Add evidence-grounded document intelligence extraction with summaries, claims, canonical entities,
+  typed semantic relations, stable graph IDs, and DuckDB persistence.
+
+### Fixes
+
+- Normalize document source types, human-language codes, authors, and topics while rejecting prompt
+  leakage and schema placeholders.
+- Preserve safe typed failure categories instead of storing generic errors, absolute paths, or stack
+  backtraces.
+
 ## 0.1.1 - 2026-09-19
 
 ### Packaging

@@ -27,15 +27,33 @@ pub use baml::{Checked, StreamState};
 pub enum Types {
     AggregatedResearchOutput(AggregatedResearchOutput),
 
+    ClaimOutput(ClaimOutput),
+
     DocumentClassification(DocumentClassification),
 
+    DocumentIntelligenceOutput(DocumentIntelligenceOutput),
+
+    EntityOutput(EntityOutput),
+
     EvidenceReferenceOutput(EvidenceReferenceOutput),
+
+    IntelligenceChunkOutput(IntelligenceChunkOutput),
 
     ResearchChunkOutput(ResearchChunkOutput),
 
     ResearchDraftOutput(ResearchDraftOutput),
 
+    SemanticRelationOutput(SemanticRelationOutput),
+
     SourceSpanInput(SourceSpanInput),
+
+    ClaimKind(ClaimKind),
+
+    DocumentSourceType(DocumentSourceType),
+
+    EntityKind(EntityKind),
+
+    SemanticRelationType(SemanticRelationType),
 }
 
 impl ::baml::KnownTypes for Types {
@@ -47,15 +65,33 @@ impl ::baml::KnownTypes for Types {
         match self {
             Self::AggregatedResearchOutput(_) => "AggregatedResearchOutput",
 
+            Self::ClaimOutput(_) => "ClaimOutput",
+
             Self::DocumentClassification(_) => "DocumentClassification",
 
+            Self::DocumentIntelligenceOutput(_) => "DocumentIntelligenceOutput",
+
+            Self::EntityOutput(_) => "EntityOutput",
+
             Self::EvidenceReferenceOutput(_) => "EvidenceReferenceOutput",
+
+            Self::IntelligenceChunkOutput(_) => "IntelligenceChunkOutput",
 
             Self::ResearchChunkOutput(_) => "ResearchChunkOutput",
 
             Self::ResearchDraftOutput(_) => "ResearchDraftOutput",
 
+            Self::SemanticRelationOutput(_) => "SemanticRelationOutput",
+
             Self::SourceSpanInput(_) => "SourceSpanInput",
+
+            Self::ClaimKind(_) => "ClaimKind",
+
+            Self::DocumentSourceType(_) => "DocumentSourceType",
+
+            Self::EntityKind(_) => "EntityKind",
+
+            Self::SemanticRelationType(_) => "SemanticRelationType",
         }
     }
 }

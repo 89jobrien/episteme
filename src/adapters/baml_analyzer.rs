@@ -1,26 +1,39 @@
 //! Typed BAML adapter for local document classification and distillation.
 
-use std::collections::HashSet;
+use std::borrow::Cow;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use async_trait::async_trait;
+use chrono::Utc;
 use tokio::task::JoinSet;
 use tokio::time::timeout;
 
 use crate::baml_client::B;
+use crate::baml_client::types::DocumentSourceType as BamlDocumentSourceType;
 use crate::baml_client::types::{
-    AggregatedResearchOutput, DocumentClassification as BamlClassification, ResearchChunkOutput,
-    ResearchDraftOutput, SourceSpanInput,
+    AggregatedResearchOutput, ClaimKind as BamlClaimKind,
+    DocumentClassification as BamlClassification, DocumentIntelligenceOutput,
+    EntityKind as BamlEntityKind, IntelligenceChunkOutput, ResearchChunkOutput,
+    ResearchDraftOutput, SemanticRelationType as BamlRelationType, SourceSpanInput,
 };
-use crate::config::LocalModelEndpoint;
-use crate::domain::{DocumentClassification, EvidenceReference, ExtractedDocument, ResearchDraft};
-use crate::ports::{AnalysisError, DocumentClassifier, ResearchAnalyzer};
+use crate::config::{ClassifierProfile, LocalModelEndpoint};
+use crate::domain::{
+    AnalysisProvenance, ClaimKind, ClassificationFailure, ClassificationFailureCode,
+    DocumentClassification, DocumentIntelligence, DocumentSourceType, EntityKind,
+    EvidenceReference, ExtractedDocument, IntelligenceClaim, IntelligenceEntity,
+    IntelligenceSummary, ResearchDraft, SemanticRelation, SemanticRelationType,
+};
+use crate::ports::{
+    AnalysisError, DocumentIntelligenceAnalyzer, ProfileClassifier, ResearchAnalyzer,
+};
 
 const DISTILLATION_CHUNK_CHARACTERS: usize = 12_000;
 const MAX_DISTILLATION_CHUNKS: usize = 24;
 const MAX_CONCURRENT_CHUNKS: usize = 2;
 const MAX_AGGREGATE_FINDINGS_CHARACTERS: usize = 60_000;
 const EVIDENCE_SPAN_CHARACTERS: usize = 500;
+const CLASSIFICATION_OMISSION_MARKER: &str = "\n\n[... middle omitted for classification ...]\n\n";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct DocumentChunk {
@@ -44,33 +57,100 @@ enum DistillationPlan {
 /// Runs Episteme's typed classification function against a configured local client.
 #[derive(Debug, Clone)]
 pub struct BamlDocumentClassifier {
-    endpoint: LocalModelEndpoint,
     timeout: Duration,
 }
 
 impl BamlDocumentClassifier {
     /// Creates a classifier using a validated local endpoint.
     #[must_use]
-    pub const fn new(endpoint: LocalModelEndpoint, timeout: Duration) -> Self {
-        Self { endpoint, timeout }
+    pub const fn new(timeout: Duration) -> Self {
+        Self { timeout }
     }
 }
 
 #[async_trait]
-impl DocumentClassifier for BamlDocumentClassifier {
-    async fn classify(
+impl ProfileClassifier for BamlDocumentClassifier {
+    async fn classify_with_profile(
         &self,
         document: &ExtractedDocument,
-    ) -> Result<DocumentClassification, AnalysisError> {
-        let classification =
-            classify_with_baml(&self.endpoint, self.timeout, document.text()).await?;
+        profile: &ClassifierProfile,
+    ) -> Result<DocumentClassification, ClassificationFailure> {
+        let input = bounded_classification_input(document.text(), profile.maximum_input_characters);
+        let classification = classify_with_baml(&profile.endpoint, self.timeout, &input)
+            .await
+            .map_err(|error| classification_failure(&error))?;
         Ok(DocumentClassification {
             title: classification.title,
             authors: classification.authors,
-            source_type: classification.source_type,
-            language: classification.language,
+            source_type: document_source_type(&classification.source_type),
+            language_code: classification.language_code,
             topics: classification.topics,
         })
+    }
+}
+
+fn bounded_classification_input(document: &str, maximum_characters: usize) -> Cow<'_, str> {
+    if document.chars().count() <= maximum_characters {
+        return Cow::Borrowed(document);
+    }
+    let marker_characters = CLASSIFICATION_OMISSION_MARKER.chars().count();
+    if maximum_characters <= marker_characters {
+        return Cow::Owned(document.chars().take(maximum_characters).collect());
+    }
+    let available = maximum_characters - marker_characters;
+    let head_characters = available * 4 / 5;
+    let tail_characters = available - head_characters;
+    let head = document.chars().take(head_characters).collect::<String>();
+    let tail = document
+        .chars()
+        .rev()
+        .take(tail_characters)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect::<String>();
+    Cow::Owned(format!("{head}{CLASSIFICATION_OMISSION_MARKER}{tail}"))
+}
+
+fn classification_failure(error: &AnalysisError) -> ClassificationFailure {
+    let message = error.to_string().to_ascii_lowercase();
+    if message.contains("context")
+        || message.contains("token limit")
+        || message.contains("too many tokens")
+    {
+        ClassificationFailure::retryable(
+            ClassificationFailureCode::ContextOverflow,
+            "classifier context window was exceeded",
+        )
+    } else if message.contains("connect")
+        || message.contains("timeout")
+        || message.contains("unavailable")
+    {
+        ClassificationFailure::retryable(
+            ClassificationFailureCode::EndpointUnavailable,
+            "local classifier endpoint was unavailable",
+        )
+    } else {
+        ClassificationFailure::retryable(
+            ClassificationFailureCode::ModelRequest,
+            "local classifier request failed",
+        )
+    }
+}
+
+const fn document_source_type(source_type: &BamlDocumentSourceType) -> DocumentSourceType {
+    match source_type {
+        BamlDocumentSourceType::ResearchPaper => DocumentSourceType::ResearchPaper,
+        BamlDocumentSourceType::Report => DocumentSourceType::Report,
+        BamlDocumentSourceType::Article => DocumentSourceType::Article,
+        BamlDocumentSourceType::Documentation => DocumentSourceType::Documentation,
+        BamlDocumentSourceType::Website => DocumentSourceType::Website,
+        BamlDocumentSourceType::SourceCode => DocumentSourceType::SourceCode,
+        BamlDocumentSourceType::Repository => DocumentSourceType::Repository,
+        BamlDocumentSourceType::Specification => DocumentSourceType::Specification,
+        BamlDocumentSourceType::Tutorial => DocumentSourceType::Tutorial,
+        BamlDocumentSourceType::PersonalProfile => DocumentSourceType::PersonalProfile,
+        BamlDocumentSourceType::Other => DocumentSourceType::Other,
     }
 }
 
@@ -80,6 +160,80 @@ pub struct BamlResearchAnalyzer {
     classifier: LocalModelEndpoint,
     distiller: LocalModelEndpoint,
     timeout: Duration,
+}
+
+/// Runs evidence-grounded document intelligence map/reduce locally.
+#[derive(Debug, Clone)]
+pub struct BamlDocumentIntelligenceAnalyzer {
+    endpoint: LocalModelEndpoint,
+    timeout: Duration,
+}
+
+impl BamlDocumentIntelligenceAnalyzer {
+    /// Creates an intelligence analyzer for one local endpoint and request timeout.
+    #[must_use]
+    pub const fn new(endpoint: LocalModelEndpoint, timeout: Duration) -> Self {
+        Self { endpoint, timeout }
+    }
+}
+
+#[async_trait]
+impl DocumentIntelligenceAnalyzer for BamlDocumentIntelligenceAnalyzer {
+    async fn analyze_intelligence(
+        &self,
+        document: &ExtractedDocument,
+        classification: &DocumentClassification,
+    ) -> Result<DocumentIntelligence, AnalysisError> {
+        let baml_classification = to_baml_classification(classification);
+        let chunks = chunk_document(document.text())?;
+        let mut outputs = Vec::new();
+        let all_spans = chunks
+            .iter()
+            .flat_map(|chunk| chunk.spans.iter().cloned())
+            .collect::<Vec<_>>();
+        for chunk in chunks {
+            let spans = chunk
+                .spans
+                .iter()
+                .map(|span| SourceSpanInput {
+                    id: span.id.clone(),
+                    text: span.text.clone(),
+                    location: span.location.clone(),
+                })
+                .collect::<Vec<_>>();
+            let mut output = B
+                .ExtractIntelligenceChunk
+                .with_env_var(
+                    "EPISTEME_DISTILL_BASE_URL",
+                    self.endpoint.base_url().as_str(),
+                )
+                .with_env_var("EPISTEME_DISTILL_MODEL", self.endpoint.model())
+                .with_cancellation_token(Some(baml::CancellationToken::new_with_timeout(
+                    self.timeout,
+                )))
+                .call(&spans, &baml_classification)
+                .await
+                .map_err(|_| {
+                    AnalysisError::Model("intelligence chunk request failed".to_owned())
+                })?;
+            namespace_intelligence_chunk(chunk.index, &mut output);
+            outputs.push(output);
+        }
+        let output = B
+            .AggregateDocumentIntelligence
+            .with_env_var(
+                "EPISTEME_DISTILL_BASE_URL",
+                self.endpoint.base_url().as_str(),
+            )
+            .with_env_var("EPISTEME_DISTILL_MODEL", self.endpoint.model())
+            .with_cancellation_token(Some(baml::CancellationToken::new_with_timeout(
+                self.timeout,
+            )))
+            .call(&baml_classification, &outputs)
+            .await
+            .map_err(|_| AnalysisError::Model("intelligence aggregation failed".to_owned()))?;
+        intelligence_from_output(document, classification, output, &all_spans, &self.endpoint)
+    }
 }
 
 impl BamlResearchAnalyzer {
@@ -436,6 +590,259 @@ fn valid_model_text(value: &str, maximum_characters: usize) -> bool {
     !value.trim().is_empty() && value.chars().count() <= maximum_characters
 }
 
+fn namespace_intelligence_chunk(index: usize, output: &mut IntelligenceChunkOutput) {
+    let prefix = format!("chunk-{index}-");
+    for claim in &mut output.claims {
+        let old = claim.local_id.clone();
+        claim.local_id = format!("{prefix}{old}");
+        for relation in &mut output.relations {
+            if relation.source_local_id == old {
+                relation.source_local_id.clone_from(&claim.local_id);
+            }
+            if relation.target_local_id == old {
+                relation.target_local_id.clone_from(&claim.local_id);
+            }
+        }
+    }
+    for entity in &mut output.entities {
+        let old = entity.local_id.clone();
+        entity.local_id = format!("{prefix}{old}");
+        for relation in &mut output.relations {
+            if relation.source_local_id == old {
+                relation.source_local_id.clone_from(&entity.local_id);
+            }
+            if relation.target_local_id == old {
+                relation.target_local_id.clone_from(&entity.local_id);
+            }
+        }
+    }
+}
+
+fn intelligence_from_output(
+    document: &ExtractedDocument,
+    classification: &DocumentClassification,
+    output: DocumentIntelligenceOutput,
+    spans: &[SourceSpan],
+    endpoint: &LocalModelEndpoint,
+) -> Result<DocumentIntelligence, AnalysisError> {
+    let DocumentIntelligenceOutput {
+        summary,
+        key_points,
+        summary_span_ids,
+        claims: output_claims,
+        entities: output_entities,
+        relations: output_relations,
+    } = output;
+    let mut node_ids = HashMap::new();
+    let mut claim_ids = HashSet::new();
+    let mut entity_ids = HashSet::new();
+    let mut claims = Vec::new();
+    for claim in output_claims {
+        let evidence = bounded_evidence(&claim.evidence_span_ids, spans, 8)?;
+        let confidence = u8::try_from(claim.confidence_percent)
+            .map_err(|_| AnalysisError::Invalid("claim confidence was invalid".to_owned()))?;
+        let value =
+            IntelligenceClaim::new(claim.text, claim_kind(&claim.kind), confidence, evidence)
+                .map_err(|error| AnalysisError::Invalid(error.to_string()))?;
+        if node_ids.insert(claim.local_id, value.id.clone()).is_some() {
+            return Err(AnalysisError::Invalid(
+                "duplicate intelligence node id".to_owned(),
+            ));
+        }
+        claim_ids.insert(value.id.clone());
+        claims.push(value);
+    }
+    let mut entities = Vec::new();
+    for entity in output_entities {
+        let evidence = bounded_evidence(&entity.evidence_span_ids, spans, 8)?;
+        let mut value = IntelligenceEntity::new(
+            entity.name,
+            entity_kind(&entity.kind),
+            entity.description,
+            evidence,
+        )
+        .map_err(|error| AnalysisError::Invalid(error.to_string()))?;
+        value.aliases = entity
+            .aliases
+            .into_iter()
+            .map(|alias| alias.trim().to_owned())
+            .filter(|alias| !alias.is_empty())
+            .take(32)
+            .collect();
+        if node_ids.insert(entity.local_id, value.id.clone()).is_some() {
+            return Err(AnalysisError::Invalid(
+                "duplicate intelligence node id".to_owned(),
+            ));
+        }
+        entity_ids.insert(value.id.clone());
+        entities.push(value);
+    }
+    let mut relations = Vec::new();
+    for relation in output_relations {
+        let source_id = node_ids
+            .get(&relation.source_local_id)
+            .cloned()
+            .ok_or_else(|| {
+                AnalysisError::Invalid("unknown intelligence relation source".to_owned())
+            })?;
+        let target_id = node_ids
+            .get(&relation.target_local_id)
+            .cloned()
+            .ok_or_else(|| {
+                AnalysisError::Invalid("unknown intelligence relation target".to_owned())
+            })?;
+        let relation_type = relation_type(&relation.relation_type);
+        let valid_endpoint_kinds = match relation_type {
+            SemanticRelationType::Supports | SemanticRelationType::Contradicts => {
+                claim_ids.contains(&source_id) && claim_ids.contains(&target_id)
+            }
+            _ => entity_ids.contains(&source_id) && entity_ids.contains(&target_id),
+        };
+        if !valid_endpoint_kinds {
+            continue;
+        }
+        let confidence = u8::try_from(relation.confidence_percent)
+            .map_err(|_| AnalysisError::Invalid("relation confidence was invalid".to_owned()))?;
+        relations.push(
+            SemanticRelation::new(
+                source_id,
+                target_id,
+                relation_type,
+                confidence,
+                bounded_evidence(&relation.evidence_span_ids, spans, 8)?,
+                document.source().digest(),
+            )
+            .map_err(|error| AnalysisError::Invalid(error.to_string()))?,
+        );
+    }
+    let summary = intelligence_summary(summary, key_points, &summary_span_ids, spans)?;
+    finish_intelligence(
+        document,
+        classification,
+        endpoint,
+        summary,
+        claims,
+        entities,
+        relations,
+    )
+}
+
+fn intelligence_summary(
+    text: String,
+    key_points: Vec<String>,
+    span_ids: &[String],
+    spans: &[SourceSpan],
+) -> Result<IntelligenceSummary, AnalysisError> {
+    Ok(IntelligenceSummary {
+        text,
+        key_points,
+        evidence: bounded_evidence(span_ids, spans, 12)?,
+    })
+}
+
+fn finish_intelligence(
+    document: &ExtractedDocument,
+    classification: &DocumentClassification,
+    endpoint: &LocalModelEndpoint,
+    summary: IntelligenceSummary,
+    claims: Vec<IntelligenceClaim>,
+    entities: Vec<IntelligenceEntity>,
+    relations: Vec<SemanticRelation>,
+) -> Result<DocumentIntelligence, AnalysisError> {
+    DocumentIntelligence {
+        source_digest: document.source().digest().clone(),
+        classification: classification.clone(),
+        summary,
+        claims,
+        entities,
+        relations,
+        analysis: AnalysisProvenance {
+            function: "DocumentIntelligence".to_owned(),
+            client: "LocalDistiller".to_owned(),
+            model: endpoint.model().to_owned(),
+            pipeline_version: "intelligence-v1".to_owned(),
+            processed_at: Utc::now().to_rfc3339(),
+        },
+    }
+    .validate_against(document.text())
+    .map_err(|error| AnalysisError::Invalid(error.to_string()))
+}
+
+fn bounded_evidence(
+    ids: &[String],
+    spans: &[SourceSpan],
+    maximum: usize,
+) -> Result<Vec<EvidenceReference>, AnalysisError> {
+    evidence_from_span_ids(
+        &ids.iter().take(maximum).cloned().collect::<Vec<_>>(),
+        spans,
+    )
+}
+
+fn to_baml_classification(value: &DocumentClassification) -> BamlClassification {
+    BamlClassification {
+        title: value.title.clone(),
+        authors: value.authors.clone(),
+        source_type: baml_document_source_type(value.source_type),
+        language_code: value.language_code.clone(),
+        topics: value.topics.clone(),
+    }
+}
+
+const fn baml_document_source_type(value: DocumentSourceType) -> BamlDocumentSourceType {
+    match value {
+        DocumentSourceType::ResearchPaper => BamlDocumentSourceType::ResearchPaper,
+        DocumentSourceType::Report => BamlDocumentSourceType::Report,
+        DocumentSourceType::Article => BamlDocumentSourceType::Article,
+        DocumentSourceType::Documentation => BamlDocumentSourceType::Documentation,
+        DocumentSourceType::Website => BamlDocumentSourceType::Website,
+        DocumentSourceType::SourceCode => BamlDocumentSourceType::SourceCode,
+        DocumentSourceType::Repository => BamlDocumentSourceType::Repository,
+        DocumentSourceType::Specification => BamlDocumentSourceType::Specification,
+        DocumentSourceType::Tutorial => BamlDocumentSourceType::Tutorial,
+        DocumentSourceType::PersonalProfile => BamlDocumentSourceType::PersonalProfile,
+        DocumentSourceType::Other => BamlDocumentSourceType::Other,
+    }
+}
+
+const fn claim_kind(value: &BamlClaimKind) -> ClaimKind {
+    match value {
+        BamlClaimKind::Fact => ClaimKind::Fact,
+        BamlClaimKind::Inference => ClaimKind::Inference,
+        BamlClaimKind::Recommendation => ClaimKind::Recommendation,
+        BamlClaimKind::Critique => ClaimKind::Critique,
+    }
+}
+
+const fn entity_kind(value: &BamlEntityKind) -> EntityKind {
+    match value {
+        BamlEntityKind::Person => EntityKind::Person,
+        BamlEntityKind::Organization => EntityKind::Organization,
+        BamlEntityKind::Project => EntityKind::Project,
+        BamlEntityKind::Technology => EntityKind::Technology,
+        BamlEntityKind::Concept => EntityKind::Concept,
+        BamlEntityKind::Method => EntityKind::Method,
+        BamlEntityKind::Dataset => EntityKind::Dataset,
+        BamlEntityKind::Benchmark => EntityKind::Benchmark,
+        BamlEntityKind::Document => EntityKind::Document,
+    }
+}
+
+const fn relation_type(value: &BamlRelationType) -> SemanticRelationType {
+    match value {
+        BamlRelationType::Supports => SemanticRelationType::Supports,
+        BamlRelationType::Contradicts => SemanticRelationType::Contradicts,
+        BamlRelationType::Implements => SemanticRelationType::Implements,
+        BamlRelationType::Evaluates => SemanticRelationType::Evaluates,
+        BamlRelationType::DependsOn => SemanticRelationType::DependsOn,
+        BamlRelationType::Extends => SemanticRelationType::Extends,
+        BamlRelationType::Uses => SemanticRelationType::Uses,
+        BamlRelationType::Causes => SemanticRelationType::Causes,
+        BamlRelationType::PartOf => SemanticRelationType::PartOf,
+        BamlRelationType::EvolvesFrom => SemanticRelationType::EvolvesFrom,
+    }
+}
+
 fn research_draft(output: ResearchDraftOutput) -> ResearchDraft {
     ResearchDraft {
         title: output.title,
@@ -602,7 +1009,23 @@ async fn classify_with_baml(
         .with_cancellation_token(Some(baml::CancellationToken::new_with_timeout(timeout)))
         .call(document)
         .await
-        .map_err(|_| AnalysisError::Model("classifier request failed".to_owned()))
+        .map_err(|error| {
+            let message = error.to_string().to_ascii_lowercase();
+            let category = if message.contains("context")
+                || message.contains("token limit")
+                || message.contains("too many tokens")
+            {
+                "classifier context overflow"
+            } else if message.contains("connect")
+                || message.contains("timeout")
+                || message.contains("unavailable")
+            {
+                "classifier endpoint unavailable"
+            } else {
+                "classifier request failed"
+            };
+            AnalysisError::Model(category.to_owned())
+        })
 }
 
 #[cfg(test)]

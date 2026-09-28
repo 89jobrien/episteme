@@ -1,3 +1,5 @@
+//! Tests read-only reporting for missing executable dependencies.
+
 use episteme::doctor::{Doctor, RequiredTool};
 
 #[test]

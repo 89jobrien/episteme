@@ -142,3 +142,131 @@ tasks:
     phase: done
     status: done
     depends_on: [t17]
+
+  - id: t19
+    title: "classification normalizes taxonomy and rejects placeholders"
+    crate: episteme-local
+    test: "classification_normalizes_taxonomy_and_rejects_placeholders"
+    phase: done
+    status: done
+    depends_on: [t18]
+
+  - id: t20
+    title: "settings parse ordered classifier profiles with limits"
+    crate: episteme-local
+    test: "settings_parse_ordered_classifier_profiles_with_limits"
+    phase: done
+    status: done
+    depends_on: [t19]
+
+  - id: t21
+    title: "router falls back after context overflow with safe failures"
+    crate: episteme-local
+    test: "router_falls_back_after_context_overflow_and_preserves_safe_failure"
+    phase: done
+    status: done
+    depends_on: [t20]
+
+  - id: t22
+    title: "DuckDB versions classifications and reconciles attempts"
+    crate: episteme-local
+    test: "duckdb_versions_classifications_and_reconciles_latest_attempts"
+    phase: done
+    status: done
+    depends_on: [t21]
+
+  - id: t23
+    title: "classification cache requires key and force refreshes"
+    crate: episteme-local
+    test: "classification_cache_requires_matching_key_and_force_refreshes"
+    phase: done
+    status: done
+    depends_on: [t22]
+
+  - id: t24
+    title: "batch resumes retries and reconciles final status"
+    crate: episteme-local
+    test: "batch_resumes_retries_and_reconciles_final_status"
+    phase: done
+    status: done
+    depends_on: [t23]
+
+  - id: t25
+    title: "CLI exposes batch force retry and summary options"
+    crate: episteme-local
+    test: "cli_exposes_batch_force_retry_and_summary_options"
+    phase: done
+    status: done
+    depends_on: [t24]
+
+  - id: t26
+    title: "live batch classification reconciles retries"
+    crate: episteme-local
+    test: "live_batch_classification_reconciles_retries"
+    phase: done
+    status: done
+    depends_on: [t25]
+
+  - id: t27
+    title: "intelligence canonicalizes IDs and rejects ungrounded graphs"
+    crate: episteme-local
+    test: "intelligence_canonicalizes_ids_and_rejects_ungrounded_graphs"
+    phase: done
+    status: done
+    depends_on: [t26]
+
+  - id: t28
+    title: "BAML generates document intelligence APIs"
+    crate: episteme-local
+    test: "generated_document_intelligence_api_is_available"
+    phase: done
+    status: done
+    depends_on: [t27]
+
+  - id: t29
+    title: "intelligence spans resolve exact Unicode evidence"
+    crate: episteme-local
+    test: "intelligence_spans_resolve_exact_unicode_evidence"
+    phase: done
+    status: done
+    depends_on: [t28]
+
+  - id: t30
+    title: "intelligence analyzer rejects unknown IDs and endpoints"
+    crate: episteme-local
+    test: "intelligence_analyzer_rejects_unknown_ids_and_endpoints"
+    phase: done
+    status: done
+    depends_on: [t29]
+
+  - id: t31
+    title: "DuckDB round-trips document intelligence graph"
+    crate: episteme-local
+    test: "duckdb_round_trips_document_intelligence_graph"
+    phase: done
+    status: done
+    depends_on: [t30]
+
+  - id: t32
+    title: "intelligence pipeline extracts once and reuses cache"
+    crate: episteme-local
+    test: "intelligence_pipeline_extracts_once_and_reuses_versioned_cache"
+    phase: done
+    status: done
+    depends_on: [t31]
+
+  - id: t33
+    title: "intelligence batch resumes and reconciles graph attempts"
+    crate: episteme-local
+    test: "intelligence_batch_resumes_and_reconciles_graph_attempts"
+    phase: red
+    status: active
+    depends_on: [t32]
+
+  - id: t34
+    title: "CLI exposes analyze and analyze-batch"
+    crate: episteme-local
+    test: "cli_exposes_analyze_and_analyze_batch"
+    phase: pending
+    status: pending
+    depends_on: [t33]

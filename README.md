@@ -53,6 +53,9 @@ Ollama's conventional `11434` port.
 episteme --config episteme.toml doctor
 episteme --config episteme.toml init
 episteme --config episteme.toml classify "/path/inside/configured/inbox/document.pdf"
+episteme --config episteme.toml classify --force "/path/inside/configured/inbox/document.pdf"
+episteme --config episteme.toml classify-batch --summary ".ctx/classification-summary.json"
+episteme --config episteme.toml analyze --force "/path/inside/configured/inbox/document.pdf"
 episteme --config episteme.toml ingest "/path/inside/configured/inbox/document.pdf"
 episteme --config episteme.toml watch
 ```
@@ -60,6 +63,20 @@ episteme --config episteme.toml watch
 `classify` extracts one inbox document, persists typed metadata in rebuildable DuckDB state, and
 prints the stored record as JSON. It does not create a note, archive the source, or refresh `zk`.
 Repeated classification of unchanged content reuses the digest-matched record.
+
+`classify-batch` recursively discovers supported inbox documents without following symlinks,
+persists every attempt in DuckDB, and emits one reconciled JSON summary with relative source paths,
+selected model, extracted character count, duration, retryability, and safe error codes. Use
+`--retry-failed` to resume retryable failures under the same `--batch-id`, or `--force` to bypass
+matching model/policy cache entries. Classifier profiles are tried in configuration order when their
+explicit `maximum_input_characters` accepts the extracted document. Book-scale inputs that exceed
+every profile are reduced to a deterministic bounded head/tail excerpt for the largest profile.
+Summary files use atomic no-clobber persistence and never replace an existing path.
+
+`analyze` produces a versioned evidence-grounded document intelligence graph: a concise summary,
+claims, canonical entities, and typed semantic relations. Models select source span IDs; Rust
+reconstructs exact quotes and locations, validates graph endpoints, generates stable IDs, and stores
+the rebuildable graph in DuckDB without modifying the vault.
 
 `watch` requires two unchanged observations before processing a file. Manual and watched ingestion
 use the same recoverable application service.

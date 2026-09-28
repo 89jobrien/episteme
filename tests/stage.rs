@@ -1,3 +1,5 @@
+//! Tests immutable staging copies and rejection of symlinked paths.
+
 use std::os::unix::fs::symlink;
 
 use episteme::stage::{StageError, stage_source};
