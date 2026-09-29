@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.0 - 2026-09-28
+
 ### Features
 
 - Add native resumable batch classification with bounded concurrency, force refresh, retry controls,
