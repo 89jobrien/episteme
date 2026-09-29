@@ -84,7 +84,7 @@ targets:
   # The version is pinned in two places and they must agree: the argument below
   # and --bump minor in release-plan / release-apply. Minor, not patch, because
   # 0.2.0 adds public API surface (the intelligence module, the analyze and
-  # analyze-batch CLI commands, two new migrations).
+  # classify-batch CLI commands, two new migrations).
   release-bump:
     steps:
       - step: promote_changelog

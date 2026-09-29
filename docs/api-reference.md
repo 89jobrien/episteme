@@ -14,6 +14,8 @@ The package published to crates.io is `episteme-local`; the library and binary a
 - [Domain types](#domain-types) — validated core types
 - [Document intelligence](#document-intelligence) — the grounded graph
 - [Classification](#classification)
+- [Staging, ingestion, and watch](#staging,-ingestion,-and-watch)
+- [Doctor](#doctor)
 - [Configuration](#configuration)
 - [CLI reference](#cli-reference)
 - [Errors](#errors)
@@ -295,6 +297,84 @@ Only a `retryable` attempt is eligible for `--retry-failed`. The `message` field
 free of source content, response bodies, absolute paths, and stack backtraces; `code` is the
 machine-readable category callers should branch on. Both properties are covered by
 `classification_processor_redacts_extraction_paths`.
+
+## Staging, ingestion, and watch
+
+### Staging
+
+```rust
+pub fn stage_source(
+    inbox_root: &Path,
+    source: &Path,
+    staging_root: &Path,
+    maximum_source_bytes: u64,
+) -> Result<StagedSource, StageError>
+```
+
+The entry point to every pipeline. Validates that `source` resolves beneath `inbox_root`, then
+produces an immutable private copy under `staging_root`. Every rejection reason is a distinct
+`StageError` variant, so callers can distinguish a path problem from an unsupported format:
+
+| Variant               | Cause                                                |
+| --------------------- | ---------------------------------------------------- |
+| `Filesystem`          | A filesystem call failed.                            |
+| `NotRegularFile`      | The path is not a regular file.                      |
+| `OutsideInbox`        | The path escaped the configured inbox root.          |
+| `InvalidFileName`     | The filename could escape or corrupt a trusted root. |
+| `UnsupportedDocument` | The extension is not a supported input type.         |
+| `SourceTooLarge`      | The file exceeded `maximum_source_bytes`.            |
+
+Symlink handling is covered by `source_open_rejects_symlink_substitution`,
+`staging_rejects_symlinked_parent_components`, and `staging_uses_an_immutable_private_copy`.
+
+### Ingestion
+
+```rust
+pub struct Ingestor<E, A, V, S, I>;   // extractor, analyzer, vault, store, indexer
+```
+
+Coordinates one source through extraction, research analysis, vault persistence, and indexing. Like
+the other pipelines it takes its ports as generic parameters, so a test can substitute all five.
+
+```rust
+pub enum IngestError { Extraction, Analysis, Vault, Store, Index }
+```
+
+Five unit variants, one per stage — the same content-free error discipline as `IntelligenceError`.
+
+### Watch
+
+```rust
+pub enum WatchDecision {
+    Ignore,           // outside policy, or not a regular file
+    Pending,          // another unchanged observation is required
+    Ready(PathBuf),   // stable and safe to enqueue
+}
+```
+
+The two-observation rule from the README is implemented here: a file is `Pending` until it has been
+seen unchanged twice, then becomes `Ready`. `watch_ignores_unstable_or_out_of_root_files` covers
+the `Ignore` and `Pending` transitions.
+
+```rust
+pub struct StableFileTracker;   // internal fingerprint state
+pub enum WatchError { Filesystem(..) }
+```
+
+### Doctor
+
+```rust
+pub struct RequiredTool { pub name: String, pub path: PathBuf }
+pub struct ToolCheck    { pub name: String, pub path: PathBuf, pub available: bool }
+pub struct DoctorReport { pub checks: Vec<ToolCheck> }
+
+DoctorReport::is_healthy(&self) -> bool
+Doctor::check_tools(tools: &[RequiredTool]) -> DoctorReport
+```
+
+`check_tools` is pure: it inspects the configured paths and returns a report without side effects.
+`is_healthy` is true only when every check is available — `doctor_reports_missing_dependency`
+exercises the negative case.
 
 ## Configuration
 

@@ -221,6 +221,10 @@ described a real release:
 | `release-23f0097ebf9e8ea4.json` | 0.3.0→0.4.0 | `cb58668` | Cascade artifact. Reverted.        |
 | `release-5f769e66f11bd293.json` | 0.1.1→0.2.0 | `477b5ac` | **The real 0.2.0 release.**        |
 
+The first three were deleted once 0.2.0 shipped; only the last remains. The table is kept as a
+worked example of what torn state looks like, since the three failures are otherwise invisible in
+the repository.
+
 Selecting by mtime happened to pick the correct one, but only because the failed attempts were
 older. It is not a guarantee.
 
