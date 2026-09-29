@@ -260,7 +260,7 @@ tasks:
     crate: episteme-local
     test: "intelligence_batch_resumes_and_reconciles_graph_attempts"
     phase: red
-    status: active
+    status: pending
     depends_on: [t32]
 
   - id: t34
