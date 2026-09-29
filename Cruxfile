@@ -121,12 +121,18 @@ targets:
           cmd: "op plugin run -- cargo rail release run episteme-local --bump minor --yes"
           cwd: /Users/joe/dev/episteme
         timeout_ms: 1800000
-        # A failed upload leaves a resumable state file under
-        # target/cargo-rail/releases/; cargo-rail reports the resume command
-        # in its output rather than failing silently.
-        retry:
-          count: 2
-          delay_ms: 30000
+        # NO retry policy here, deliberately.
+        #
+        # This step is not idempotent: cargo-rail reads the current version
+        # and bumps it, commits, and tags. A retry re-runs that whole
+        # sequence, so a failure partway through (an auth failure on upload,
+        # say) advances the version again on every attempt. An earlier
+        # revision of this file carried `retry: {count: 2}` and a single
+        # failed publish produced 0.2.0, 0.3.0, and 0.4.0.
+        #
+        # cargo-rail already writes a resumable state file and prints the
+        # resume command on failure, so recovery belongs to the
+        # release-resume target, not to a blind re-run.
 
   # Resume an interrupted publish from cargo-rail's own state file, after
   # release-apply failed partway (typically a cargo login or network error).
