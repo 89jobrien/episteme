@@ -1,0 +1,142 @@
+# Release configuration for cargo-rail.
+#
+# cargo-rail owns the mechanical part of a release: the Cargo.toml and
+# Cargo.lock version bump, the release commit, the tag, and the crates.io
+# upload. The changelog stays hand-authored -- see the changelog section below.
+#
+# Regenerate the full default set with:
+#   cargo rail release init episteme-local --check
+targets = []
+
+[unify]
+include_paths = true
+include_renamed = false
+pin_transitives = false
+transitive_host = "root"
+exclude = []
+include = []
+max_backups = 3
+msrv = true
+enforce_msrv_inheritance = false
+msrv_source = "max"
+prune_dead_features = true
+consumer_scope = "open"
+preserve_features = []
+strict_version_compat = true
+exact_pin_handling = "warn"
+major_version_conflict = "warn"
+detect_unused = true
+compiler_diag_cache = true
+remove_unused = true
+detect_undeclared_features = true
+fix_undeclared_features = true
+skip_undeclared_patterns = [
+    "default",
+    "std",
+    "alloc",
+    "*_backend",
+    "*_impl",
+]
+sort_dependencies = true
+
+[release]
+tag_prefix = "v"
+# The default is "{crate}-{prefix}{version}", which would tag releases
+# episteme-local-v0.2.0. The history already uses bare v-prefixed tags
+# (v0.1.0, v0.1.1), so match them.
+tag_format = "{prefix}{version}"
+require_clean = true
+publish_delay = 5
+create_github_release = false
+forge = "auto"
+push = false
+sign_tags = false
+require_changelog_entries = false
+# Defaults to true and points at release-notes/, which this repo does not
+# have. CHANGELOG.md is the release-notes artifact here.
+require_release_notes = false
+release_notes_dir = "release-notes"
+change_dir = ".changes"
+pre_1_breaking_bump = "minor"
+unconventional_commits = "warn"
+semver_check = "warn"
+require_change_files = false
+
+[release.version_groups]
+
+[release.changelog]
+path = "CHANGELOG.md"
+relative_to = "crate"
+entry_format = "- {scope}{breaking}{description}{prs} ({sha_link})"
+emoji = true
+group_order = [
+    "breaking",
+    "feat",
+    "fix",
+    "build",
+    "chore",
+    "ci",
+    "deps",
+    "docs",
+    "other",
+    "perf",
+    "refactor",
+    "style",
+    "test",
+]
+fallback = "other"
+groups = []
+
+[release.changelog.filters]
+skip_types = []
+skip_scopes = []
+include_paths = []
+exclude_paths = []
+
+[change-detection]
+infrastructure = [
+    ".github/**",
+    "scripts/**",
+    "justfile",
+    "Justfile",
+    "Makefile",
+    "makefile",
+    "GNUmakefile",
+    "*.sh",
+    "Taskfile.yml",
+    "Taskfile.yaml",
+    ".pre-commit-config.yaml",
+    "deny.toml",
+    "cliff.toml",
+    "release.toml",
+    "release-plz.toml",
+]
+unknown_file_policy = "strict"
+confidence_profile = "balanced"
+
+[change-detection.custom]
+
+[run.profile]
+
+[run.workflow]
+
+[crates.episteme-local.release]
+publish = true
+
+[crates.episteme-local.changelog]
+path = "CHANGELOG.md"
+# The per-crate changelog switch, and the load-bearing setting in this file.
+#
+# cargo-rail's generated changelog is unusable for this repo. It derives
+# entries from commit subjects, and the feature work in 0.2.0 landed in
+# 17998d4 "chore: checkpoint workspace and Rust documentation" -- typed as a
+# chore despite carrying 7k lines of shipped features, so an auto-generated
+# section would describe the release as chores only. It also appends its
+# section below the older releases rather than replacing the Unreleased
+# heading, which would strand the real notes.
+#
+# So rail never writes CHANGELOG.md. The notes are written by hand under
+# "## Unreleased" and cut to a dated section by scripts/promote-changelog.sh,
+# which only retitles the heading and never edits entry text.
+skip = true
+groups = []

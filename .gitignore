@@ -3,6 +3,9 @@
 /.state/
 /.env
 
+# release traces
+.release-trace.json
+
 # handoff-begin
 .ctx/
 # handoff-end

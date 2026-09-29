@@ -1,0 +1,247 @@
+# Cruxfile for episteme-local release orchestration.
+#
+# Run a target:
+#   crux run --strict --plugins <plugins.toml> --target <target> Cruxfile
+#
+# The plugin host is NOT declared here; it must be passed with --plugins on every
+# invocation, because the release handlers (release::prepare, release::gates,
+# release::publish, release::report) live in a subprocess plugin rather than in
+# the built-in registry:
+#
+#   crux run --strict \
+#     --plugins ~/.agents/skills/rust-release-orchestrator/scripts/plugins.toml \
+#     --target dry-run Cruxfile
+#
+# Why the options are hardcoded instead of templated from input
+# ------------------------------------------------------------
+# A Cruxfile target executes with a null input (crux-cli run.rs passes
+# Value::Null for every target), and --input is only honoured for single-purpose
+# .crux pipelines -- for a Cruxfile it is parsed and then discarded. So
+# `{{ input.dry_run }}` does not resolve here: it is emitted as a literal
+# string and arrives at the plugin as the text "{{ input.dry_run }}", which
+# fails to deserialize into the typed ReleaseInput booleans.
+#
+# Each target below therefore encodes its own flags as literal YAML, which is
+# what the multi-target form is for: the target name is the input. The
+# workspace is a literal for the same reason -- a Cruxfile target cannot read
+# it from input. That hardcoded path is machine-specific by construction.
+project: episteme
+# release-plan is the default because it is the only release target that
+# changes nothing: it prints the planned version, tag, and mutation list
+# without bumping, committing, tagging, or publishing. Every other target
+# either mutates the repo or uploads.
+default: release-plan
+
+# Publishing walks every handler (prepare, gates, one publish per crate,
+# report) with retries, so the call ceiling is per-crate generous. duration_ms
+# is the wall-clock guard for the whole run; a cold release that compiles
+# dependencies before the gates lands well inside an hour.
+budget:
+  calls: 40
+  duration_ms: 3600000
+
+targets:
+  # ---------------------------------------------------------------------
+  # cargo-rail release targets.
+  #
+  # These own the mechanical release: the Cargo.toml and Cargo.lock version
+  # bump, the release commit, the tag, and the crates.io upload. The
+  # changelog stays hand-authored -- .config/rail.toml sets
+  # crates.episteme-local.changelog.skip = true, and scripts/promote-changelog.sh
+  # performs the heading cut. See the comments in rail.toml for why.
+  #
+  # Unlike the release-orchestrator plugin below, cargo-rail drives the whole
+  # sequence itself, so these targets are shell steps rather than a
+  # prepare/gates/publish/report fan-out.
+  # ---------------------------------------------------------------------
+
+  # Preview the release plan. Writes nothing: no bump, no commit, no tag, no
+  # publish. Safe to run at any time. This is the default because it is the
+  # only release target that cannot change anything.
+  release-plan:
+    steps:
+      # shell::exec, not shell::capture: cargo-rail exits 1 from --check to
+      # signal "a release is pending", not to signal failure -- the JSON it
+      # prints is the successful output. shell::capture would treat that exit
+      # code as a step error and discard the plan.
+      - step: rail_plan
+        handler: shell::exec
+        args:
+          cmd: "cargo rail release run episteme-local --bump minor --check --format json"
+          cwd: /Users/joe/dev/episteme
+        timeout_ms: 600000
+
+      - step: log_plan
+        handler: ctrl::log
+        args:
+          field: stdout
+
+  # Cut the changelog and stage the bump. Rewrites CHANGELOG.md in place and
+  # commits it, because cargo-rail refuses to run against a dirty tree
+  # (require_clean = true) -- and because a committed cut is reviewable before
+  # anything is tagged.
+  #
+  # The version is pinned in two places and they must agree: the argument below
+  # and --bump minor in release-plan / release-apply. Minor, not patch, because
+  # 0.2.0 adds public API surface (the intelligence module, the analyze and
+  # analyze-batch CLI commands, two new migrations).
+  release-bump:
+    steps:
+      - step: promote_changelog
+        handler: shell::capture
+        args:
+          cmd: "./scripts/promote-changelog.sh 0.2.0"
+          cwd: /Users/joe/dev/episteme
+        timeout_ms: 120000
+
+      - step: commit_changelog
+        handler: shell::capture
+        args:
+          cmd: "git add CHANGELOG.md && git commit -m 'docs(release): cut 0.2.0 changelog section'"
+          cwd: /Users/joe/dev/episteme
+        timeout_ms: 300000
+
+  # Apply the release: bump, commit, tag, and publish to crates.io.
+  # IRREVERSIBLE. Only run after release-plan and release-bump, and only after
+  # confirming the upload.
+  release-apply:
+    steps:
+      # shell::capture on purpose: unlike the --check path above, a non-zero
+      # exit here is a real failure and must fail the step, so an upload that
+      # did not happen can never be mistaken for a release.
+      #
+      # Wrapped in `op plugin run --` so the crates.io token is provisioned
+      # from 1Password at run time. There is no ~/.cargo/credentials.toml on
+      # this machine and no CARGO_REGISTRY_TOKEN in the environment, so an
+      # unwrapped `cargo publish` fails with "no token found" after the bump,
+      # commit, and tag have already landed.
+      - step: rail_release
+        handler: shell::capture
+        args:
+          cmd: "op plugin run -- cargo rail release run episteme-local --bump minor --yes"
+          cwd: /Users/joe/dev/episteme
+        timeout_ms: 1800000
+        # A failed upload leaves a resumable state file under
+        # target/cargo-rail/releases/; cargo-rail reports the resume command
+        # in its output rather than failing silently.
+        retry:
+          count: 2
+          delay_ms: 30000
+
+  # Resume an interrupted publish from cargo-rail's own state file, after
+  # release-apply failed partway (typically a cargo login or network error).
+  release-resume:
+    steps:
+      # Also wrapped in op plugin run: a resume re-attempts the upload, which
+      # needs the same crates.io token.
+      - step: rail_resume
+        handler: shell::capture
+        args:
+          cmd: "op plugin run -- cargo rail release resume $(ls -t target/cargo-rail/releases/*.json | head -1)"
+          cwd: /Users/joe/dev/episteme
+        timeout_ms: 1800000
+
+  # ---------------------------------------------------------------------
+  # release-orchestrator plugin targets.
+  #
+  # These use the rust-release-orchestrator plugin instead of cargo-rail. They
+  # are kept because the plugin is the more general multi-crate tool, but for
+  # this single-crate repo the cargo-rail targets above are the ones to use --
+  # they additionally own the version bump and tag.
+  # ---------------------------------------------------------------------
+
+  # Validation only. Cargo packages and verifies the crate and uploads
+  # nothing.
+  dry-run:
+    steps:
+      - step: prepare
+        handler: release::prepare
+        args:
+          workspace: /Users/joe/dev/episteme
+          dry_run: true
+          resume: false
+          skip_gates: false
+
+      - step: gates
+        handler: release::gates
+
+      - for_each: publish_packages as package
+        items: "{{ steps.prepare.output.packages }}"
+        steps:
+          - step: publish
+            handler: release::publish
+            args:
+              package: "{{ iter.package }}"
+
+      - step: report
+        handler: release::report
+
+  # A real release via the plugin. Uploads to crates.io. Only run this after
+  # dry-run has validated the exact version and you have confirmed the upload.
+  # Unlike release-apply, this does not bump the version or create a tag.
+  plugin-release:
+    steps:
+      - step: prepare
+        handler: release::prepare
+        args:
+          workspace: /Users/joe/dev/episteme
+          dry_run: false
+          resume: false
+          skip_gates: false
+
+      - step: gates
+        handler: release::gates
+
+      - for_each: publish_packages as package
+        items: "{{ steps.prepare.output.packages }}"
+        steps:
+          - step: publish
+            handler: release::publish
+            args:
+              package: "{{ iter.package }}"
+
+      - step: report
+        handler: release::report
+
+  # Resume an interrupted plugin release. Reads target/.release-state.json and
+  # reports already-published crates as skipped. Never pair this with a version
+  # bump: the recorded state refers to the version it was created for.
+  plugin-resume:
+    steps:
+      - step: prepare
+        handler: release::prepare
+        args:
+          workspace: /Users/joe/dev/episteme
+          dry_run: false
+          resume: true
+          skip_gates: false
+
+      - step: gates
+        handler: release::gates
+
+      - for_each: publish_packages as package
+        items: "{{ steps.prepare.output.packages }}"
+        steps:
+          - step: publish
+            handler: release::publish
+            args:
+              package: "{{ iter.package }}"
+
+      - step: report
+        handler: release::report
+
+  # Gates without packaging. Useful before a release because it runs the same
+  # fmt, clippy, and nextest checks the release path runs, and touches no
+  # Cargo packaging state at all.
+  gates:
+    steps:
+      - step: prepare
+        handler: release::prepare
+        args:
+          workspace: /Users/joe/dev/episteme
+          dry_run: true
+          resume: false
+          skip_gates: true
+
+      - step: gates
+        handler: release::gates
