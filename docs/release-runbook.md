@@ -148,15 +148,49 @@ During the 0.2.0 release, `cargo rail release resume` ended with:
 error: episteme-local v0.2.0 was published but did not become observable within 60s
 ```
 
-**Both halves of that were wrong.** 0.2.0 had not been published, and the upload had left no trace
-on crates.io at all. The registry API, the index, and the download endpoint all agreed the version
-was absent. Re-running `release-apply` on the strength of that message would have published
-0.3.0 — the same cascade described above.
+**Both halves of that were wrong.** 0.2.0 had not been published, and the upload had never been
+attempted. The registry API, the index, and the download endpoint all agreed the version was
+absent. Re-running `release-apply` on the strength of that message would have published 0.3.0 —
+the same cascade described above.
 
-Cargo-rail polls the sparse index to confirm a version landed, and the index is CDN-cached with
-`max-age=600`. A 60-second observation window can therefore read a cache that predates the upload
-and misattribute the result. Meanwhile a genuinely failed upload is reported with the same
-"was published" phrasing.
+### Why resume polls but never uploads
+
+Confirmed against cargo-rail 0.17.3 (`src/release/publisher.rs`, `reconcile_publications`). The
+function has three branches:
+
+```rust
+if publication.is_complete()            { /* already done */ }
+if self.registry_version_exists(&plan)  { /* landed anyway */ }
+if publication.status == InProgress {
+    self.wait_for_registry(&plan)?;     // polls only — NO upload
+    ...
+}
+publication.status = InProgress;
+self.publish_crate(&plan)?;             // the actual upload
+fault_after("publish", &plan.name)?;
+self.wait_for_registry(&plan)?;
+```
+
+Our state file carried `publication: in_progress` from the earlier token failure, so `resume` took
+the third branch and **only polled. It never called `publish_crate`.** Nothing was uploaded, and
+after 60s the poll timed out.
+
+The message is wrong because `wait_for_registry` is reached _only after_ a successful upload on the
+fresh path, so the code assumes it means "uploaded, waiting for propagation." In the resume path
+that assumption is false. The 60s window comes from
+`timeout = (publish_delay.clamp(1,10) * 12).max(30)` = 60s, which is short — but shortness is not
+the defect here. **No upload occurred, so no amount of waiting would have helped.**
+
+### Consequence for the next release
+
+`resume` is only a retry of the _observation_, not of the upload. If a release fails **before**
+`publish_crate` runs, `resume` will poll forever and fail identically. No rail target re-attempts
+the upload from an `in_progress` state — the supported paths are `release-apply` (which bumps, and
+is not idempotent) or `cargo publish` directly.
+
+This was reproduced on 2026-09-29 with cargo-rail 0.17.3. The installed binary was roughly 13
+releases behind upstream at the time. **Confirm the behaviour of your installed version before
+relying on `resume`.**
 
 So: **always confirm externally before retrying anything.** Three independent checks, strongest
 last.
@@ -189,9 +223,23 @@ independent integrity check.
 
 ## Recovery
 
-When an upload fails partway, `release-resume` is the recovery path — not a re-run of
-`release-apply`. cargo-rail persists the completed bump, commit, and tag in
-`target/cargo-rail/releases/*.json`, so resuming re-attempts only the upload.
+**`release-resume` re-attempts the _observation_, not the upload.** cargo-rail persists the
+completed bump, commit, and tag in `target/cargo-rail/releases/*.json`, but if a release failed
+before `publish_crate` ran, the state file records `publication: in_progress` and `resume` only
+polls for an existing version. It will not upload. See
+[why resume polls but never uploads](#why-resume-polls-but-never-uploads).
+
+Choose the recovery path by where the previous attempt stopped:
+
+| Previous attempt stopped                        | Correct recovery                                            |
+| ----------------------------------------------- | ----------------------------------------------------------- |
+| Before `publish_crate` ran                      | `cargo publish` directly, then `resume` to reconcile state. |
+| After `publish_crate` ran, version is absent    | Same: `cargo publish`, then `resume`.                       |
+| Version is actually published                   | `resume` alone — it will observe it and settle the state.   |
+| Version not yet visible but genuinely uploading | Wait, then re-check. Only then `resume`.                    |
+
+In every case, **establish which row you are in before acting**, using the external checks above.
+That is the whole point: the state file and the error message both failed to distinguish them.
 
 ```bash
 SCHEME=op; CARGO_REGISTRY_TOKEN=$(op read "${SCHEME}://cli/cargo-api-token/token") \

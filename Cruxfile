@@ -139,13 +139,23 @@ targets:
         # resume command on failure, so recovery belongs to the
         # release-resume target, not to a blind re-run.
 
-  # Resume an interrupted publish from cargo-rail's own state file, after
+  # Resume an interrupted publish from cargo-rail's state file, after
   # release-apply failed partway (typically an auth or network error).
   #
   # This target -- not release-apply -- is the recovery path, because the
   # apply step is not idempotent. cargo-rail persists the completed bump,
-  # commit, and tag in target/cargo-rail/releases/*.json, so resuming
-  # re-attempts only the upload.
+  # commit, and tag in target/cargo-rail/releases/*.json.
+  #
+  # IMPORTANT, verified against cargo-rail 0.17.3 on 2026-09-29: resume
+  # re-attempts only the OBSERVATION, not the upload. If a state file has
+  # publication: in_progress, reconcile_publications takes the
+  # wait_for_registry branch and never calls publish_crate, so a version
+  # that was never uploaded will never be uploaded by this target. It then
+  # reports "was published but did not become observable", which is false.
+  #
+  # So: verify externally whether the version exists first. If it is absent,
+  # run `cargo publish` directly and then use this target to reconcile the
+  # state. See docs/release-runbook.md.
   release-resume:
     steps:
       # The crates.io token is read from 1Password and exported into this

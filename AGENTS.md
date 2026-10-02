@@ -46,13 +46,18 @@ Non-obvious constraints, each of which has already caused a real failure:
   entries yourself; `scripts/promote-changelog.sh` only retitles the heading.
 - **Never blind-retry `release-apply`.** It bumps, commits, tags, and uploads in one
   non-idempotent sequence, so a retry advances the version. A single failed publish with a retry
-  policy produced 0.2.0, 0.3.0, and 0.4.0, undone by the `98d6cfe` revert. Recover with
-  `release-resume`.
-- **Verify the actual outcome before retrying anything.** cargo-rail has reported a failed upload as
-  `was published but did not become observable`, which was false in both halves. Confirm against the
-  crates.io API and the tarball download, not the tool's message.
+  policy produced 0.2.0, 0.3.0, and 0.4.0, undone by the `98d6cfe` revert.
+- **`release-resume` re-attempts the observation, not the upload.** Verified against cargo-rail
+  0.17.3: with `publication: in_progress`, `reconcile_publications` takes the `wait_for_registry`
+  branch and never calls `publish_crate`, so an unuploaded version is never uploaded by that
+  target. It then reports `was published but did not become observable`, which is false in both
+  halves. Check the crates.io API and tarball first; if the version is absent, `cargo publish`
+  directly, then `resume` to reconcile state.
 - **The crates.io token must be exported as `CARGO_REGISTRY_TOKEN`.** `op plugin run -- cargo` does
   not work — it writes the token under `[registries.cratebox]`, not `[registry]`.
+- **Check the installed cargo-rail version before trusting any of this.** The local binary was
+  0.17.3 while upstream was 0.30.1; the resume behaviour above is specific to the installed
+  version's `publisher.rs`.
 - cargo-rail does not push. `push = false`, so `git push origin main` and the tag push are manual.
 
 ## Documentation
