@@ -11,25 +11,14 @@ targets = []
 [unify]
 include_paths = true
 include_renamed = false
-pin_transitives = false
-transitive_host = "root"
 exclude = []
 include = []
 max_backups = 3
-msrv = true
-enforce_msrv_inheritance = false
-msrv_source = "max"
-prune_dead_features = true
 consumer_scope = "open"
 preserve_features = []
 strict_version_compat = true
 exact_pin_handling = "warn"
 major_version_conflict = "warn"
-detect_unused = true
-compiler_diag_cache = true
-remove_unused = true
-detect_undeclared_features = true
-fix_undeclared_features = true
 skip_undeclared_patterns = [
     "default",
     "std",
@@ -37,19 +26,44 @@ skip_undeclared_patterns = [
     "*_backend",
     "*_impl",
 ]
-sort_dependencies = true
 
 [release]
+# Plan from conventional commit subjects. cargo-rail 0.25.0 changed the default
+# to ReleaseSource::Changes, which makes `.changes` files mandatory for any crate
+# with code changes. This repo has never used that directory and plans from
+# commits, so the default would fail every release with
+# "missing change files for episteme-local: code changes require .changes coverage".
+source = "commits"
+# cargo-rail 0.25.0 split publication away from git and forge effects, then
+# coupled them back together as a safety interlock: --publish is refused while
+# remote_effects = "none" (registry_publication_skipped in
+# src/commands/release.rs). The same guard is present at 0.30.1, so this is
+# deliberate design rather than a version quirk.
+#
+# The old `push = false` is not removed -- it is a deprecated compatibility field
+# that resolves to remote_effects = "none" (see ReleaseConfig's deserializer).
+# It is therefore not an alternative here; it is the same incompatible state.
+# Mixing remote_effects with push, create_github_release, or forge is a hard
+# parse error, which is why `cargo rail config migrate` removed them.
+#
+# Full rail automation, chosen deliberately over the manual-push model that
+# 0.17.3's `push = false` expressed. Consequences, all accepted:
+#   * rail now pushes the release commit and the tag itself, so git lands
+#     BEFORE the crates.io upload (PUSH_RELEASE_COMMIT precedes PUBLISH_CRATE).
+#     The verify-then-push order used for 0.2.0 is deliberately abandoned.
+#   * the plan inserts AWAIT_EXACT_SHA_CHECKS. This repo has no .github
+#     workflows, so that gate currently has nothing to bind to; it is planned
+#     with poll = false and should not block, but it is unverified against a
+#     real apply.
+# Neither is a reason to keep an older cargo-rail: the 0.17.3 resume path could
+# not upload at all.
+remote_effects = "push"
+registry_publication = "crates-io"
 tag_prefix = "v"
 # The default is "{crate}-{prefix}{version}", which would tag releases
 # episteme-local-v0.2.0. The history already uses bare v-prefixed tags
 # (v0.1.0, v0.1.1), so match them.
 tag_format = "{prefix}{version}"
-require_clean = true
-publish_delay = 5
-create_github_release = false
-forge = "auto"
-push = false
 sign_tags = false
 require_changelog_entries = false
 # Defaults to true and points at release-notes/, which this repo does not
@@ -93,32 +107,19 @@ skip_scopes = []
 include_paths = []
 exclude_paths = []
 
-[change-detection]
-infrastructure = [
-    ".github/**",
-    "scripts/**",
-    "justfile",
-    "Justfile",
-    "Makefile",
-    "makefile",
-    "GNUmakefile",
-    "*.sh",
-    "Taskfile.yml",
-    "Taskfile.yaml",
-    ".pre-commit-config.yaml",
-    "deny.toml",
-    "cliff.toml",
-    "release.toml",
-    "release-plz.toml",
-]
-unknown_file_policy = "strict"
-confidence_profile = "balanced"
-
-[change-detection.custom]
-
-[run.profile]
-
-[run.workflow]
+# Removed under cargo-rail 0.25.0:
+#
+#   [change-detection] / [change-detection.custom] -- drove commit analysis for
+#     changelog generation. Irrelevant here: this crate sets
+#     crates.episteme-local.changelog.skip = true, so rail never writes
+#     CHANGELOG.md. The notes are hand-authored.
+#
+#   [run.profile] / [run.workflow] -- cargo-rail no longer owns task running.
+#     Its replacement guidance is to execute Cargo and cargo-nextest directly
+#     and keep repository tasks in Just. This repo already does that: see the
+#     `ci` recipe in justfile.
+#
+# Nothing about the bump, commit, tag, or upload path depended on either.
 
 [crates.episteme-local.release]
 publish = true

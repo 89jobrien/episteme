@@ -44,21 +44,25 @@ Non-obvious constraints, each of which has already caused a real failure:
   `crates.episteme-local.changelog.skip = true` because cargo-rail derives entries from commit
   subjects, and this repository's feature merges are typed `chore`. Write the `## Unreleased`
   entries yourself; `scripts/promote-changelog.sh` only retitles the heading.
-- **Never blind-retry `release-apply`.** It bumps, commits, tags, and uploads in one
+- **Never blind-retry `release-apply`.** It bumps, commits, pushes, uploads, and tags in one
   non-idempotent sequence, so a retry advances the version. A single failed publish with a retry
-  policy produced 0.2.0, 0.3.0, and 0.4.0, undone by the `98d6cfe` revert.
-- **`release-resume` re-attempts the observation, not the upload.** Verified against cargo-rail
-  0.17.3: with `publication: in_progress`, `reconcile_publications` takes the `wait_for_registry`
-  branch and never calls `publish_crate`, so an unuploaded version is never uploaded by that
-  target. It then reports `was published but did not become observable`, which is false in both
-  halves. Check the crates.io API and tarball first; if the version is absent, `cargo publish`
-  directly, then `resume` to reconcile state.
+  policy produced 0.2.0, 0.3.0, and 0.4.0, undone by the `98d6cfe` revert. Recover with
+  `release-resume`.
+- **Requires cargo-rail >= 0.25.0.** Under 0.17.3, `release-resume` could not upload at all: with
+  `publication: in_progress`, `reconcile_publications` took the `wait_for_registry` branch and
+  never called `publish_crate`, then falsely reported `was published but did not become
+observable`. That is fixed — `publish_crate` is now called unconditionally. Do not downgrade.
 - **The crates.io token must be exported as `CARGO_REGISTRY_TOKEN`.** `op plugin run -- cargo` does
   not work — it writes the token under `[registries.cratebox]`, not `[registry]`.
-- **Check the installed cargo-rail version before trusting any of this.** The local binary was
-  0.17.3 while upstream was 0.30.1; the resume behaviour above is specific to the installed
-  version's `publisher.rs`.
-- cargo-rail does not push. `push = false`, so `git push origin main` and the tag push are manual.
+- **cargo-rail now pushes git itself.** `remote_effects = "push"`, because 0.25.0 refuses
+  `--publish` while `remote_effects = "none"`. The old `push = false` still parses but is
+  deprecated: it resolves to `remote_effects = "none"`, which is exactly the state `--publish`
+  rejects. So the two are mutually exclusive rather than the old option being gone — mixing
+  `remote_effects` with any of `push`, `create_github_release`, or `forge` is a hard parse error.
+  The release commit reaches origin **before** the crates.io upload, and the tag is pushed after.
+  A failed upload therefore leaves git ahead of the registry; reconcile with `release-resume`,
+  never force-push. Both `release-plan` and `release-apply` need `--publish`, or the release will
+  bump, commit, and tag a version it never uploads.
 
 ## Documentation
 

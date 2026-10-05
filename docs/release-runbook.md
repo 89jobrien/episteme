@@ -1,7 +1,7 @@
 # Release runbook
 
 How to cut a release of `episteme-local` to crates.io, and how to recover when a publish fails
-partway. Written against cargo-rail 0.17.3 and the `Cruxfile` at the repository root.
+partway. Written against **cargo-rail 0.25.0** and the `Cruxfile` at the repository root.
 
 ## Contents
 
@@ -12,10 +12,11 @@ partway. Written against cargo-rail 0.17.3 and the `Cruxfile` at the repository 
 - [Credentials](#credentials)
 - [The apply step is not idempotent](#the-apply-step-is-not-idempotent)
 - [Verify the actual outcome — never trust the error message](#verify-the-actual-outcome--never-trust-the-error-message)
+  - [The bug, and why it is gone](#the-bug,-and-why-it-is-gone)
 - [Recovery](#recovery)
   - [Pass the state file explicitly](#pass-the-state-file-explicitly)
   - [Reconciling state after a manual publish](#reconciling-state-after-a-manual-publish)
-- [cargo-rail does not push](#cargo-rail-does-not-push)
+- [cargo-rail now pushes git](#cargo-rail-now-pushes-git)
 - [Plugin targets](#plugin-targets)
 - [What a successful release looks like](#what-a-successful-release-looks-like)
 
@@ -61,11 +62,11 @@ crux run --strict --plugins ~/.agents/skills/rust-release-orchestrator/scripts/p
   --target release-plan Cruxfile
 ```
 
-| Step         | Target          | Mutates                                          |
-| ------------ | --------------- | ------------------------------------------------ |
-| 1. Plan      | `release-plan`  | Nothing. Prints planned version, tag, mutations. |
-| 2. Cut notes | `release-bump`  | `CHANGELOG.md`; commits it.                      |
-| 3. Release   | `release-apply` | Bump, commit, tag, **upload**.                   |
+| Step         | Target          | Mutates                                                       |
+| ------------ | --------------- | ------------------------------------------------------------- |
+| 1. Plan      | `release-plan`  | Nothing. Prints planned version, tag, mutations.              |
+| 2. Cut notes | `release-bump`  | `CHANGELOG.md`; commits it.                                   |
+| 3. Release   | `release-apply` | Bump, commit, **push commit**, **upload**, tag, **push tag**. |
 
 `release-plan` is the `Cruxfile` default because it is the only release target that cannot change
 anything — every other target either mutates the repository or uploads.
@@ -75,14 +76,16 @@ Steps 2 and 3 must agree on one version number, pinned in two places:
 - the argument to `scripts/promote-changelog.sh` in the `release-bump` target
 - the `--bump minor` flag in `release-plan` and `release-apply`
 
-`release-bump` is a separate commit from `release-apply` on purpose. cargo-rail refuses to run
-against a dirty tree (`require_clean = true`), and a committed changelog cut is reviewable before
-anything is tagged.
+`release-bump` is a separate commit from `release-apply` on purpose. The `require_clean = true`
+guard that used to force this split was removed in cargo-rail 0.25.0 — previews now permit a dirty
+tree and apply rejects paths outside the bound plan. The separate commit is kept anyway: it is the
+last point at which the changelog can be reviewed before the version is bumped, committed, and
+pushed to origin.
 
 ## Why `--bump minor`
 
 `pre_1_breaking_bump = "minor"` in `.config/rail.toml`, and 0.2.0 added public API surface: the
-intelligence module, the `analyze` and `analyze-batch` subcommands, and two new migrations. Patch
+intelligence module, the `analyze` and `classify-batch` subcommands, and two new migrations. Patch
 would understate that. For a 1.0+ crate, breaking changes are still a major bump.
 
 ## The changelog cut
@@ -142,7 +145,7 @@ Consequences for anyone running a release:
 
 ## Verify the actual outcome — never trust the error message
 
-During the 0.2.0 release, `cargo rail release resume` ended with:
+During the 0.2.0 release, on cargo-rail 0.17.3, `cargo rail release resume` ended with:
 
 ```text
 error: episteme-local v0.2.0 was published but did not become observable within 60s
@@ -153,47 +156,38 @@ attempted. The registry API, the index, and the download endpoint all agreed the
 absent. Re-running `release-apply` on the strength of that message would have published 0.3.0 —
 the same cascade described above.
 
-### Why resume polls but never uploads
+### The bug, and why it is gone
 
-Confirmed against cargo-rail 0.17.3 (`src/release/publisher.rs`, `reconcile_publications`). The
-function has three branches:
+In 0.17.3, `reconcile_publications` (`src/release/publisher.rs`) short-circuited the upload:
 
 ```rust
-if publication.is_complete()            { /* already done */ }
-if self.registry_version_exists(&plan)  { /* landed anyway */ }
 if publication.status == InProgress {
     self.wait_for_registry(&plan)?;     // polls only — NO upload
     ...
 }
 publication.status = InProgress;
 self.publish_crate(&plan)?;             // the actual upload
-fault_after("publish", &plan.name)?;
-self.wait_for_registry(&plan)?;
 ```
 
-Our state file carried `publication: in_progress` from the earlier token failure, so `resume` took
-the third branch and **only polled. It never called `publish_crate`.** Nothing was uploaded, and
-after 60s the poll timed out.
+An `in_progress` state therefore polled for a version that had never been uploaded, then timed out
+and blamed the registry. The message was wrong because `wait_for_registry` is reached only _after_
+a successful upload on the fresh path, so the code assumed it meant "uploaded, waiting for
+propagation."
 
-The message is wrong because `wait_for_registry` is reached _only after_ a successful upload on the
-fresh path, so the code assumes it means "uploaded, waiting for propagation." In the resume path
-that assumption is false. The 60s window comes from
-`timeout = (publish_delay.clamp(1,10) * 12).max(30)` = 60s, which is short — but shortness is not
-the defect here. **No upload occurred, so no amount of waiting would have helped.**
+**This is fixed in 0.25.0.** The `InProgress` early-return is gone, so `publish_crate` runs
+unconditionally, and the false message is replaced by an error that fires only when publish
+actually failed:
 
-### Consequence for the next release
+```text
+{crate} v{version} remains unobservable on crates.io; resume to reconcile and retry the immutable version
+```
 
-`resume` is only a retry of the _observation_, not of the upload. If a release fails **before**
-`publish_crate` runs, `resume` will poll forever and fail identically. No rail target re-attempts
-the upload from an `in_progress` state — the supported paths are `release-apply` (which bumps, and
-is not idempotent) or `cargo publish` directly.
+Do not downgrade below 0.25.0. The `resume` target is a real upload retry again.
 
-This was reproduced on 2026-09-29 with cargo-rail 0.17.3. The installed binary was roughly 13
-releases behind upstream at the time. **Confirm the behaviour of your installed version before
-relying on `resume`.**
+### Confirm externally anyway
 
-So: **always confirm externally before retrying anything.** Three independent checks, strongest
-last.
+The habit is still worth keeping, because a tool reporting success is not evidence a version
+exists. Three independent checks, strongest last.
 
 ```bash
 # 1. Authoritative version list. Requires a User-Agent; crates.io returns 403 without one.
@@ -223,23 +217,26 @@ independent integrity check.
 
 ## Recovery
 
-**`release-resume` re-attempts the _observation_, not the upload.** cargo-rail persists the
-completed bump, commit, and tag in `target/cargo-rail/releases/*.json`, but if a release failed
-before `publish_crate` ran, the state file records `publication: in_progress` and `resume` only
-polls for an existing version. It will not upload. See
-[why resume polls but never uploads](#why-resume-polls-but-never-uploads).
+Under **0.25.0 or later, `release-resume` is a genuine upload retry.** The 0.17.3 defect that made
+resume poll without publishing is fixed — see
+[the bug, and why it is gone](#the-bug,-and-why-it-is-gone). cargo-rail persists the bump, commit,
+and push state in `target/cargo-rail/releases/*.json`, and resume re-attempts the upload from an
+`in_progress` record.
 
-Choose the recovery path by where the previous attempt stopped:
+Start by asking rail what it thinks happened:
 
-| Previous attempt stopped                        | Correct recovery                                            |
-| ----------------------------------------------- | ----------------------------------------------------------- |
-| Before `publish_crate` ran                      | `cargo publish` directly, then `resume` to reconcile state. |
-| After `publish_crate` ran, version is absent    | Same: `cargo publish`, then `resume`.                       |
-| Version is actually published                   | `resume` alone — it will observe it and settle the state.   |
-| Version not yet visible but genuinely uploading | Wait, then re-check. Only then `resume`.                    |
+```bash
+cargo rail release status
+```
 
-In every case, **establish which row you are in before acting**, using the external checks above.
-That is the whole point: the state file and the error message both failed to distinguish them.
+Then choose the recovery path by where the previous attempt stopped:
+
+| Previous attempt stopped                       | Correct recovery                                                                                                                        |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Failed before the commit was pushed            | `release-resume` — nothing remote has changed yet.                                                                                      |
+| Failed after `PUSH_RELEASE_COMMIT`, no version | `release-resume`, or `cargo publish` then `resume`.                                                                                     |
+| Version is actually published                  | `resume` alone — it will observe it and settle the state.                                                                               |
+| Origin is ahead of crates.io                   | Expected. `PUSH_RELEASE_COMMIT` precedes `PUBLISH_CRATE`, so a failed upload leaves the commit on origin. Reconcile, do not force-push. |
 
 ```bash
 SCHEME=op; CARGO_REGISTRY_TOKEN=$(op read "${SCHEME}://cli/cargo-api-token/token") \
@@ -317,27 +314,55 @@ reliable substitute for a reconciliation the tool performs against the live regi
 To clear genuinely dead state, delete the files for releases that were reverted. They live under
 `/target/` and are untracked, so this is local scratch state only.
 
-## cargo-rail does not push
+## cargo-rail now pushes git
 
-`push = false` in `.config/rail.toml` means cargo-rail performs **no** remote git operation. After a
-successful release, `main` is ahead of `origin/main` and the release tag exists only locally:
+**Changed at 0.25.0.** Under 0.17.3 this repository set `push = false`, and both git pushes were
+manual. The option still parses but is deprecated — it resolves to `remote_effects = "none"`,
+which is precisely the state `--publish` refuses:
+
+```rust
+// src/commands/release.rs, registry_publication_skipped
+if release_config.remote_effects == ReleaseRemoteEffects::None {
+    return Err("--publish cannot be combined with release.remote_effects = \"none\"");
+}
+```
+
+So the old setting is not gone, it is **incompatible with publishing**:
+
+| Legacy config                  | Resolves to                  |
+| ------------------------------ | ---------------------------- |
+| `push = false`, no forge       | `remote_effects = "none"`    |
+| `push = true`                  | `remote_effects = "push"`    |
+| `create_github_release = true` | `auto` / `github` / `gitlab` |
+
+Two rules follow, both enforced as hard parse errors in `ReleaseConfig`'s deserializer rather than
+warnings: `remote_effects` cannot be combined with any of `push`, `create_github_release`, or
+`forge`; and `create_github_release = true` requires `push = true`. The legacy path is preserved
+only long enough to migrate away from it.
+
+`registry_publication_skipped` carries the same guard at 0.30.1, so this is a deliberate safety
+interlock rather than a version quirk: authorizing an irreversible registry upload requires
+authorizing remote effects too.
+
+This repository therefore sets `remote_effects = "push"`, and `release-apply` now performs both
+pushes. Confirm the resulting order with `release-plan`:
 
 ```text
-git push origin main
-git push origin v0.2.0
+BUMP_VERSION → UPDATE_LOCKFILE → COMMIT_RELEASE → PUSH_RELEASE_COMMIT
+→ AWAIT_EXACT_SHA_CHECKS → PUBLISH_CRATE → CREATE_TAG → PUSH_RELEASE_TAGS
 ```
 
-This is what cargo-rail prints when a release completes, and it is not advisory — the publish has
-already succeeded by the time you see it.
+Two consequences worth internalizing:
 
-Push `main` and the tag as separate operations so a tag push cannot drag an unexpected branch state
-along with it. Confirm a push will be a fast-forward before running it:
+- **The release commit reaches `origin` before the crates.io upload.** A failure at the upload stage
+  leaves git ahead of the registry. That is recoverable — reconcile with `release-resume` — but
+  it inverts the verify-then-push discipline used for 0.2.0, when both pushes were manual.
+- **`AWAIT_EXACT_SHA_CHECKS` has nothing to bind to.** This repository has no `.github` workflows.
+  The step is planned with `poll = false`, so it should not block, but it is unverified against a
+  real apply. If a future release hangs there, that is the first suspect.
 
-```bash
-git rev-list --left-right --count origin/main...main   # left 0 == fast-forward
-```
-
-`create_github_release = false`, so no GitHub release is created either.
+No GitHub or GitLab release is created: `remote_effects = "push"` authorizes the git push only, and
+the forge release surface is left unset.
 
 ## Plugin targets
 

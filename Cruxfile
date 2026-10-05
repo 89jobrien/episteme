@@ -42,13 +42,20 @@ budget:
 
 targets:
   # ---------------------------------------------------------------------
-  # cargo-rail release targets.
+  # cargo-rail release targets. Requires cargo-rail >= 0.25.0; the commands
+  # and the semantics below do not work on 0.17.3.
   #
   # These own the mechanical release: the Cargo.toml and Cargo.lock version
-  # bump, the release commit, the tag, and the crates.io upload. The
-  # changelog stays hand-authored -- .config/rail.toml sets
-  # crates.episteme-local.changelog.skip = true, and scripts/promote-changelog.sh
-  # performs the heading cut. See the comments in rail.toml for why.
+  # bump, the release commit, the push of that commit, the crates.io upload,
+  # the tag, and the push of the tag. The changelog stays hand-authored --
+  # .config/rail.toml sets crates.episteme-local.changelog.skip = true, and
+  # scripts/promote-changelog.sh performs the heading cut. See the comments in
+  # rail.toml for why.
+  #
+  # As of 0.25.0 rail pushes git itself (remote_effects = "push"), because
+  # --publish is refused while remote_effects = "none". Both git pushes are
+  # therefore no longer manual, and the release commit reaches origin before
+  # the crates.io upload.
   #
   # Unlike the release-orchestrator plugin below, cargo-rail drives the whole
   # sequence itself, so these targets are shell steps rather than a
@@ -56,8 +63,12 @@ targets:
   # ---------------------------------------------------------------------
 
   # Preview the release plan. Writes nothing: no bump, no commit, no tag, no
-  # publish. Safe to run at any time. This is the default because it is the
-  # only release target that cannot change anything.
+  # push, no publish. Safe to run at any time. This is the default because it is
+  # the only release target that cannot change anything.
+  #
+  # --publish is included even in the preview so the plan shows the full
+  # sequence rail would execute, including PUBLISH_CRATE. Without it the plan
+  # would omit publishing and misrepresent what release-apply does.
   release-plan:
     steps:
       # shell::exec, not shell::capture: cargo-rail exits 1 from --check to
@@ -67,7 +78,7 @@ targets:
       - step: rail_plan
         handler: shell::exec
         args:
-          cmd: "cargo rail release run episteme-local --bump minor --check --format json"
+          cmd: "cargo rail release run episteme-local --bump minor --publish --check --format json"
           cwd: /Users/joe/dev/episteme
         timeout_ms: 600000
 
@@ -77,9 +88,14 @@ targets:
           field: stdout
 
   # Cut the changelog and stage the bump. Rewrites CHANGELOG.md in place and
-  # commits it, because cargo-rail refuses to run against a dirty tree
-  # (require_clean = true) -- and because a committed cut is reviewable before
-  # anything is tagged.
+  # commits it, so a committed cut is reviewable before anything is tagged or
+  # pushed.
+  #
+  # The require_clean = true guard that used to force this split was removed in
+  # cargo-rail 0.25.0; previews now permit a dirty tree and apply rejects paths
+  # outside the bound plan. The separate commit is kept anyway -- it is the last
+  # point at which the changelog can be reviewed before the version is bumped,
+  # committed, and pushed to origin.
   #
   # The version is pinned in two places and they must agree: the argument below
   # and --bump minor in release-plan / release-apply. Minor, not patch, because
@@ -101,9 +117,9 @@ targets:
           cwd: /Users/joe/dev/episteme
         timeout_ms: 300000
 
-  # Apply the release: bump, commit, tag, and publish to crates.io.
-  # IRREVERSIBLE. Only run after release-plan and release-bump, and only after
-  # confirming the upload.
+  # Apply the release: bump, commit, push the release commit, publish to
+  # crates.io, create the tag, and push the tag. IRREVERSIBLE, and it now moves
+  # git as well as the registry. Only run after release-plan and release-bump.
   release-apply:
     steps:
       # shell::capture on purpose: unlike the --check path above, a non-zero
@@ -123,10 +139,21 @@ targets:
       - step: rail_release
         handler: shell::capture
         args:
-          cmd: "SCHEME=op; CARGO_REGISTRY_TOKEN=$(op read \"${SCHEME}://cli/cargo-api-token/token\") cargo rail release run episteme-local --bump minor --yes"
+          cmd: "SCHEME=op; CARGO_REGISTRY_TOKEN=$(op read \"${SCHEME}://cli/cargo-api-token/token\") cargo rail release run episteme-local --bump minor --publish --yes"
           cwd: /Users/joe/dev/episteme
         timeout_ms: 1800000
-        # NO retry policy here, deliberately.
+        # --publish is REQUIRED under cargo-rail 0.25.0. Before 0.25.0,
+        # `release run` published implicitly; from 0.25.0 the default plan is
+        # BUMP_VERSION, UPDATE_LOCKFILE, COMMIT_RELEASE, CREATE_TAG and nothing
+        # else, so omitting this flag produces a release that bumps, commits,
+        # and tags a version that is never uploaded. rail.toml sets
+        # registry_publication = "crates-io" and remote_effects = "push",
+        # which are the two preconditions --publish checks.
+        #
+        # --yes remains the non-interactive confirmation. `--check` is NOT
+        # valid here: it would turn this into a preview that writes nothing.
+        #
+        # NO retry policy, deliberately.
         #
         # This step is not idempotent: cargo-rail reads the current version
         # and bumps it, commits, and tags. A retry re-runs that whole
@@ -135,27 +162,48 @@ targets:
         # revision of this file carried `retry: {count: 2}` and a single
         # failed publish produced 0.2.0, 0.3.0, and 0.4.0.
         #
-        # cargo-rail already writes a resumable state file and prints the
-        # resume command on failure, so recovery belongs to the
-        # release-resume target, not to a blind re-run.
+        # cargo-rail writes a resumable state file and prints the resume
+        # command on failure, so recovery belongs to the release-resume
+        # target, not to a blind re-run.
+        #
+        # ORDERING CHANGED at 0.25.0. The plan is now
+        #   BUMP -> LOCKFILE -> COMMIT -> PUSH_RELEASE_COMMIT
+        #   -> AWAIT_EXACT_SHA_CHECKS -> PUBLISH_CRATE -> CREATE_TAG
+        #   -> PUSH_RELEASE_TAGS
+        # so rail pushes the release commit to origin BEFORE uploading, and
+        # pushes the tag AFTER. Under 0.17.3 (push = false) nothing was pushed
+        # and both pushes were manual, which allowed verifying the upload
+        # before git moved. That ordering is deliberately abandoned; see the
+        # comment on remote_effects in .config/rail.toml.
+        #
+        # AWAIT_EXACT_SHA_CHECKS is planned with poll = false and this repo has
+        # no .github workflows, so that gate has nothing to bind to. Unverified
+        # against a real apply.
 
-  # Resume an interrupted publish from cargo-rail's state file, after
-  # release-apply failed partway (typically an auth or network error).
+  # Resume an interrupted release from cargo-rail's durable state file, after
+  # release-apply failed partway (typically an auth or network error on upload).
   #
   # This target -- not release-apply -- is the recovery path, because the
-  # apply step is not idempotent. cargo-rail persists the completed bump,
-  # commit, and tag in target/cargo-rail/releases/*.json.
+  # apply step is not idempotent. cargo-rail persists the bump, commit, and tag
+  # in target/cargo-rail/releases/*.json.
   #
-  # IMPORTANT, verified against cargo-rail 0.17.3 on 2026-09-29: resume
-  # re-attempts only the OBSERVATION, not the upload. If a state file has
-  # publication: in_progress, reconcile_publications takes the
-  # wait_for_registry branch and never calls publish_crate, so a version
-  # that was never uploaded will never be uploaded by this target. It then
-  # reports "was published but did not become observable", which is false.
+  # HISTORY, and the reason this file was rewritten on 2026-09-29: under
+  # cargo-rail 0.17.3 this target could not upload at all. With
+  # publication: in_progress, reconcile_publications took the wait_for_registry
+  # branch and never called publish_crate, so an unuploaded version was never
+  # uploaded -- and it then reported "was published but did not become
+  # observable", which was false in both halves. That blocked the 0.2.0 release.
   #
-  # So: verify externally whether the version exists first. If it is absent,
-  # run `cargo publish` directly and then use this target to reconcile the
-  # state. See docs/release-runbook.md.
+  # That defect is FIXED as of 0.25.0: publish_crate is now called
+  # unconditionally, and the false message is replaced by an error that fires
+  # only when publish actually failed. Verified by reading
+  # src/release/publisher.rs at tag v0.25.0.
+  #
+  # One consequence to remember: under 0.25.0 the plan pushes the release
+  # commit before uploading, so a release that fails at the upload stage can
+  # leave origin ahead of crates.io. Reconcile with `cargo rail release status`
+  # and the external checks in docs/release-runbook.md before pushing anything
+  # further.
   release-resume:
     steps:
       # The crates.io token is read from 1Password and exported into this
